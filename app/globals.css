@@ -1,0 +1,18 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+table {
+  border-collapse: collapse;
+  width: 100%;
+}
+th,
+td {
+  border: 1px solid #e2e8f0;
+  padding: 6px 8px;
+  font-size: 0.85rem;
+  text-align: left;
+}
+th {
+  background: #f1f5f9;
+}
