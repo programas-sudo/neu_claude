@@ -20,6 +20,7 @@ export default function BuscarMatricula() {
   const [trayecto, setTrayecto] = useState(null);
   const [cargando, setCargando] = useState(false);
   const [historialGlobal, setHistorialGlobal] = useState([]);
+  const [busquedaRealizada, setBusquedaRealizada] = useState(false);
 
   // Se carga solo, apenas entrás a la pantalla, sin apretar "Buscar"
   useEffect(() => {
@@ -33,6 +34,7 @@ export default function BuscarMatricula() {
     if (!texto.trim()) return;
     setCargando(true);
     setVehiculo(null);
+    setBusquedaRealizada(true);
     try {
       const data = await buscarVehiculosPorMatricula(texto.trim());
       setResultados(data);
@@ -89,7 +91,7 @@ export default function BuscarMatricula() {
 
       {cargando && <p className="text-sm text-slate-500">Cargando...</p>}
 
-      {!vehiculo && (
+      {!vehiculo && !busquedaRealizada && (
         <section>
           <h3 className="font-medium mb-2 text-sm text-slate-600">
             Últimas planillas cargadas (todas las matrículas, más reciente primero)
@@ -145,6 +147,7 @@ export default function BuscarMatricula() {
                 setVehiculo(null);
                 setResultados([]);
                 setTexto("");
+                setBusquedaRealizada(false);
               }}
             >
               ← nueva búsqueda
