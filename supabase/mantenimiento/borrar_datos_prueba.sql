@@ -1,0 +1,1 @@
+supabase/mantenimiento/borrar_datos_prueba.sql
