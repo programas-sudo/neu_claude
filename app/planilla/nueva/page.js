@@ -243,17 +243,37 @@ function NuevaPlanillaInner() {
         planillaIdParaAdjuntos = res.planilla.id;
       }
 
+      setResultado(res);
+      setFilas(modoEdicion ? filas : []);
+
+      // La subida de adjuntos se intenta APARTE: si falla, no hace parecer
+      // que la planilla no se guardó (eso ya pasó, arriba).
+      const erroresAdjuntos = [];
       for (const file of archivosNuevos) {
-        await subirAdjunto(planillaIdParaAdjuntos, file);
+        try {
+          await subirAdjunto(planillaIdParaAdjuntos, file);
+        } catch (errArchivo) {
+          erroresAdjuntos.push(errArchivo.message || String(errArchivo));
+        }
+      }
+      if (erroresAdjuntos.length > 0) {
+        alert(
+          "La planilla se guardó correctamente, pero hubo un problema al subir " +
+            (erroresAdjuntos.length === 1 ? "el archivo" : "algunos archivos") +
+            ":\n\n" +
+            erroresAdjuntos.join("\n")
+        );
+      } else {
+        setArchivosNuevos([]);
       }
 
-      setResultado(res);
-      setArchivosNuevos([]);
-      if (!modoEdicion) {
-        setFilas([]);
+      if (modoEdicion) {
+        // recargar adjuntos existentes para reflejar lo recién subido
+        const actualizada = await getPlanillaCompleta(planillaIdEdicion);
+        setAdjuntosExistentes(actualizada.adjuntos || []);
       }
     } catch (err) {
-      alert("Error al guardar: " + err.message);
+      alert("Error al guardar la planilla: " + err.message);
     } finally {
       setGuardando(false);
     }
