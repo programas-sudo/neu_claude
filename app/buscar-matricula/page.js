@@ -1,13 +1,15 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   buscarVehiculosPorMatricula,
   getEstadoActual,
   getHistorialPlanillas,
   getHistorialNeumatico,
+  getUbicacionVigente,
+  getHistorialGlobal,
 } from "../../lib/traceability";
-import { exportarPlanillaPDF } from "../../lib/pdf";
+import { exportarPlanillaPDF, exportarEstadoActualPDF } from "../../lib/pdf";
 
 export default function BuscarMatricula() {
   const [texto, setTexto] = useState("");
@@ -15,8 +17,16 @@ export default function BuscarMatricula() {
   const [vehiculo, setVehiculo] = useState(null);
   const [estadoActual, setEstadoActual] = useState([]);
   const [historial, setHistorial] = useState([]);
-  const [trayecto, setTrayecto] = useState(null); // { identificador, filas }
+  const [trayecto, setTrayecto] = useState(null);
   const [cargando, setCargando] = useState(false);
+  const [historialGlobal, setHistorialGlobal] = useState([]);
+
+  // Se carga solo, apenas entrás a la pantalla, sin apretar "Buscar"
+  useEffect(() => {
+    getHistorialGlobal(40)
+      .then(setHistorialGlobal)
+      .catch(() => {});
+  }, []);
 
   async function buscar(e) {
     e.preventDefault();
@@ -36,10 +46,7 @@ export default function BuscarMatricula() {
     setTrayecto(null);
     setCargando(true);
     try {
-      const [estado, hist] = await Promise.all([
-        getEstadoActual(v.id),
-        getHistorialPlanillas(v.id),
-      ]);
+      const [estado, hist] = await Promise.all([getEstadoActual(v.id), getHistorialPlanillas(v.id)]);
       setEstadoActual(estado);
       setHistorial(hist);
     } finally {
@@ -82,6 +89,34 @@ export default function BuscarMatricula() {
 
       {cargando && <p className="text-sm text-slate-500">Cargando...</p>}
 
+      {!vehiculo && (
+        <section>
+          <h3 className="font-medium mb-2 text-sm text-slate-600">
+            Últimas planillas cargadas (todas las matrículas, más reciente primero)
+          </h3>
+          <div className="bg-white rounded border divide-y max-h-80 overflow-y-auto">
+            {historialGlobal.map((p) => (
+              <button
+                key={p.id}
+                onClick={() => seleccionarVehiculo({ id: p.vehiculo_id, matricula: p.matricula })}
+                className="w-full text-left px-4 py-2 hover:bg-slate-50 flex justify-between items-center"
+              >
+                <span>
+                  <span className="font-medium">{p.matricula}</span>{" "}
+                  <span className="uppercase text-xs bg-slate-200 px-2 py-0.5 rounded ml-1">
+                    {p.tipo}
+                  </span>
+                </span>
+                <span className="text-sm text-slate-500">{p.fecha}</span>
+              </button>
+            ))}
+            {historialGlobal.length === 0 && (
+              <p className="text-sm text-slate-400 px-4 py-2">Todavía no hay planillas cargadas.</p>
+            )}
+          </div>
+        </section>
+      )}
+
       {!vehiculo && resultados.length > 0 && (
         <div className="bg-white rounded border divide-y">
           {resultados.map((v) => (
@@ -102,9 +137,7 @@ export default function BuscarMatricula() {
           <div className="flex items-center justify-between">
             <h2 className="text-lg font-semibold">
               {vehiculo.matricula}{" "}
-              <span className="text-sm text-slate-500 font-normal">
-                {vehiculo.tipo_vehiculo}
-              </span>
+              <span className="text-sm text-slate-500 font-normal">{vehiculo.tipo_vehiculo}</span>
             </h2>
             <button
               className="text-sm underline"
@@ -120,7 +153,16 @@ export default function BuscarMatricula() {
 
           {/* ESTADO ACTUAL */}
           <section>
-            <h3 className="font-medium mb-2">Estado actual</h3>
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="font-medium">Estado actual</h3>
+              <button
+                className="text-xs bg-slate-900 text-white px-3 py-1 rounded"
+                onClick={() => exportarEstadoActualPDF(vehiculo, estadoActual)}
+                disabled={estadoActual.length === 0}
+              >
+                Descargar PDF
+              </button>
+            </div>
             <table>
               <thead>
                 <tr>
@@ -135,26 +177,34 @@ export default function BuscarMatricula() {
                 </tr>
               </thead>
               <tbody>
-                {estadoActual.map((f) => (
-                  <tr key={f.posicion}>
-                    <td>{f.posicion}</td>
-                    <td>{f.marca}</td>
-                    <td>{f.modelo}</td>
-                    <td>{f.medida}</td>
-                    <td>
-                      {f.numero_serie || f.dot || (
-                        <span className="text-slate-400">s/identificación</span>
-                      )}
-                    </td>
-                    <td>{f.estado}</td>
-                    <td>{f.porcentaje_desgaste != null ? `${f.porcentaje_desgaste}%` : "-"}</td>
-                    <td>
-                      <button className="text-blue-600 text-xs underline" onClick={() => verTrayecto(f)}>
-                        ver trayecto
-                      </button>
-                    </td>
-                  </tr>
-                ))}
+                {estadoActual.map((f) =>
+                  f.tiene_neumatico === false ? (
+                    <tr key={f.posicion} className="bg-red-50">
+                      <td>{f.posicion}</td>
+                      <td colSpan={6} className="text-red-700 font-medium">
+                        SIN NEUMÁTICO (desde {f.fecha_ultimo_reporte}
+                        {f.destino ? `, destino: ${f.destino}` : ""})
+                      </td>
+                    </tr>
+                  ) : (
+                    <tr key={f.posicion}>
+                      <td>{f.posicion}</td>
+                      <td>{f.marca}</td>
+                      <td>{f.modelo}</td>
+                      <td>{f.medida}</td>
+                      <td>
+                        {f.numero_serie || f.dot || <span className="text-slate-400">s/identificación</span>}
+                      </td>
+                      <td>{f.estado}</td>
+                      <td>{f.porcentaje_desgaste != null ? `${f.porcentaje_desgaste}%` : "-"}</td>
+                      <td>
+                        <button className="text-blue-600 text-xs underline" onClick={() => verTrayecto(f)}>
+                          ver trayecto
+                        </button>
+                      </td>
+                    </tr>
+                  )
+                )}
                 {estadoActual.length === 0 && (
                   <tr>
                     <td colSpan={8} className="text-center text-slate-400">
@@ -169,9 +219,17 @@ export default function BuscarMatricula() {
           {/* TRAYECTO DE UN NEUMÁTICO SELECCIONADO */}
           {trayecto && (
             <section className="bg-amber-50 border border-amber-200 rounded p-4">
-              <h3 className="font-medium mb-2">
-                Trayecto del neumático {trayecto.identificador}
-              </h3>
+              <h3 className="font-medium mb-2">Trayecto del neumático {trayecto.identificador}</h3>
+              {(() => {
+                const vigente = getUbicacionVigente(trayecto.filas);
+                return vigente && !vigente.instalado ? (
+                  <p className="text-sm text-red-700 mb-2">
+                    Actualmente NO está instalado en ningún vehículo. Salió de {vigente.matricula}{" "}
+                    pos.{vigente.posicion} el {vigente.fecha}
+                    {vigente.destino ? ` (destino: ${vigente.destino})` : ""}.
+                  </p>
+                ) : null;
+              })()}
               <table>
                 <thead>
                   <tr>
@@ -207,18 +265,16 @@ export default function BuscarMatricula() {
             </section>
           )}
 
-          {/* HISTORIAL CRONOLÓGICO DE PLANILLAS */}
+          {/* HISTORIAL CRONOLÓGICO DE PLANILLAS (más reciente primero) */}
           <section>
-            <h3 className="font-medium mb-2">Historial de planillas cargadas</h3>
+            <h3 className="font-medium mb-2">Historial de planillas cargadas (más reciente primero)</h3>
             <div className="space-y-4">
               {historial.map((p) => (
                 <div key={p.id} className="bg-white border rounded p-4">
                   <div className="flex justify-between items-start">
                     <div>
                       <span className="font-medium">{p.fecha}</span> —{" "}
-                      <span className="uppercase text-xs bg-slate-200 px-2 py-0.5 rounded">
-                        {p.tipo}
-                      </span>{" "}
+                      <span className="uppercase text-xs bg-slate-200 px-2 py-0.5 rounded">{p.tipo}</span>{" "}
                       <span className="text-sm text-slate-500">
                         {p.modo_carga === "parcial" ? "(carga parcial)" : "(carga completa)"}
                       </span>
@@ -226,12 +282,20 @@ export default function BuscarMatricula() {
                         Chofer: {p.chofer || "-"} · Vehículo: {p.tipo_vehiculo || "-"} · Km: {p.km ?? "-"}
                       </div>
                     </div>
-                    <button
-                      className="text-xs bg-slate-900 text-white px-3 py-1 rounded"
-                      onClick={() => exportarPlanillaPDF(p)}
-                    >
-                      Descargar PDF
-                    </button>
+                    <div className="flex gap-2">
+                      <a
+                        className="text-xs bg-white border px-3 py-1 rounded"
+                        href={`/planilla/nueva?id=${p.id}`}
+                      >
+                        Editar
+                      </a>
+                      <button
+                        className="text-xs bg-slate-900 text-white px-3 py-1 rounded"
+                        onClick={() => exportarPlanillaPDF(p)}
+                      >
+                        Descargar PDF
+                      </button>
+                    </div>
                   </div>
 
                   <table className="mt-3">
