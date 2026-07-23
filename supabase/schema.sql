@@ -66,6 +66,7 @@ create table if not exists planilla_neumaticos (
                                      -- "Vehículo ABC123 - Posición 2", "Stock/Depósito"...
   destino text,                     -- a dónde va (si accion='sale'): "Vehículo XYZ - Posición 4",
                                      -- "Depósito", "Descarte/Rotura", "Recapado (taller X)"...
+  hubo_cambio boolean not null default true, -- false = control de rutina sin cambios (no entra al trayecto)
   created_at timestamptz default now()
 );
 
@@ -102,6 +103,7 @@ select distinct on (pn.posicion, p.vehiculo_id)
   p.vehiculo_id,
   p.matricula,
   pn.posicion,
+  (pn.accion <> 'sale') as tiene_neumatico,
   pn.marca,
   pn.modelo,
   pn.medida,
@@ -111,12 +113,12 @@ select distinct on (pn.posicion, p.vehiculo_id)
   pn.estado,
   pn.porcentaje_desgaste,
   pn.recapado,
+  pn.destino,
   p.fecha as fecha_ultimo_reporte,
   p.id as planilla_id
 from planilla_neumaticos pn
 join planillas p on p.id = pn.planilla_id
 where pn.posicion is not null
-  and pn.accion <> 'sale'
 order by pn.posicion, p.vehiculo_id, p.fecha desc, pn.created_at desc;
 
 -- ---------------------------------------------------------
@@ -146,7 +148,8 @@ select
   p.id as planilla_id
 from planilla_neumaticos pn
 join planillas p on p.id = pn.planilla_id
-where pn.numero_serie is not null or pn.dot is not null
+where (pn.numero_serie is not null or pn.dot is not null)
+  and pn.hubo_cambio = true
 order by p.fecha asc, pn.created_at asc;
 
 -- ---------------------------------------------------------
@@ -184,3 +187,15 @@ create policy "auth_all_adjuntos" on adjuntos for all using (true) with check (t
 insert into storage.buckets (id, name, public)
 values ('adjuntos', 'adjuntos', true)
 on conflict (id) do nothing;
+
+drop policy if exists "adjuntos_insert" on storage.objects;
+create policy "adjuntos_insert" on storage.objects
+  for insert with check (bucket_id = 'adjuntos');
+
+drop policy if exists "adjuntos_select" on storage.objects;
+create policy "adjuntos_select" on storage.objects
+  for select using (bucket_id = 'adjuntos');
+
+drop policy if exists "adjuntos_delete" on storage.objects;
+create policy "adjuntos_delete" on storage.objects
+  for delete using (bucket_id = 'adjuntos');
