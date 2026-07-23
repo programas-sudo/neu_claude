@@ -1,14 +1,19 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import {
-  getOrCrearVehiculo,
+  buscarVehiculoExacto,
+  getVehiculoPorId,
   getEstadoActual,
+  getPlanillaCompleta,
   guardarPlanilla,
+  actualizarPlanilla,
   subirAdjunto,
+  eliminarAdjunto,
 } from "../../../lib/traceability";
 
-const ACCIONES = [
+const ACCIONES_MOVIMIENTO = [
   { value: "permanece", label: "Permanece" },
   { value: "entra", label: "Entra" },
   { value: "sale", label: "Sale" },
@@ -32,9 +37,18 @@ function filaVacia(posicion = "") {
   };
 }
 
-export default function NuevaPlanilla() {
+function NuevaPlanillaInner() {
+  const searchParams = useSearchParams();
+  const planillaIdEdicion = searchParams.get("id");
+  const modoEdicion = !!planillaIdEdicion;
+
+  const [cargandoInicial, setCargandoInicial] = useState(modoEdicion);
+
   const [matriculaInput, setMatriculaInput] = useState("");
-  const [vehiculo, setVehiculo] = useState(null);
+  const [matriculaConfirmada, setMatriculaConfirmada] = useState(false);
+  const [vehiculo, setVehiculo] = useState(null); // vehículo EXISTENTE (con id)
+  const [matriculaPendiente, setMatriculaPendiente] = useState(""); // matrícula nueva, todavía sin crear
+
   const [numPosiciones, setNumPosiciones] = useState(4);
   const [tipo, setTipo] = useState("relevamiento");
   const [fecha, setFecha] = useState(() => new Date().toISOString().slice(0, 10));
@@ -44,23 +58,81 @@ export default function NuevaPlanilla() {
   const [observaciones, setObservaciones] = useState("");
   const [filas, setFilas] = useState([]);
   const [guardando, setGuardando] = useState(false);
-  const [resultado, setResultado] = useState(null); // { planilla, avisos }
-  const [archivos, setArchivos] = useState([]);
+  const [resultado, setResultado] = useState(null);
+  const [archivosNuevos, setArchivosNuevos] = useState([]);
+  const [adjuntosExistentes, setAdjuntosExistentes] = useState([]);
 
-  async function buscarOCrearVehiculo() {
+  const matriculaEfectiva = vehiculo?.matricula || matriculaPendiente;
+
+  // ---------- Carga inicial en modo edición ----------
+  useEffect(() => {
+    if (!modoEdicion) return;
+    (async () => {
+      const p = await getPlanillaCompleta(planillaIdEdicion);
+      const v = await getVehiculoPorId(p.vehiculo_id);
+      setVehiculo(v);
+      setMatriculaConfirmada(true);
+      setNumPosiciones(v.num_posiciones || 4);
+      setTipo(p.tipo);
+      setFecha(p.fecha);
+      setChofer(p.chofer || "");
+      setTipoVehiculo(p.tipo_vehiculo || "");
+      setKm(p.km ?? "");
+      setObservaciones(p.observaciones || "");
+      setAdjuntosExistentes(p.adjuntos || []);
+      setFilas(
+        p.planilla_neumaticos.map((f) => ({
+          posicion: f.posicion || "",
+          accion: f.accion,
+          marca: f.marca || "",
+          modelo: f.modelo || "",
+          medida: f.medida || "",
+          numero_serie: f.numero_serie || "",
+          dot: f.dot || "",
+          estado: f.estado || "",
+          porcentaje_desgaste: f.porcentaje_desgaste ?? "",
+          recapado: f.recapado || false,
+          reparacion: f.reparacion || "",
+          procedencia: f.procedencia || "",
+          destino: f.destino || "",
+        }))
+      );
+      setCargandoInicial(false);
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [modoEdicion, planillaIdEdicion]);
+
+  async function buscarMatricula() {
     if (!matriculaInput.trim()) return;
-    const v = await getOrCrearVehiculo(matriculaInput, tipoVehiculo, numPosiciones);
-    setVehiculo(v);
-    setTipoVehiculo(v.tipo_vehiculo || "");
-    setNumPosiciones(v.num_posiciones || 4);
+    const encontrado = await buscarVehiculoExacto(matriculaInput);
+    if (encontrado) {
+      setVehiculo(encontrado);
+      setTipoVehiculo(encontrado.tipo_vehiculo || "");
+      setNumPosiciones(encontrado.num_posiciones || 4);
+      setMatriculaPendiente("");
+    } else {
+      setVehiculo(null);
+      setMatriculaPendiente(matriculaInput.trim().toUpperCase());
+    }
+    setMatriculaConfirmada(true);
+  }
+
+  function cambiarMatricula() {
+    setMatriculaConfirmada(false);
+    setVehiculo(null);
+    setMatriculaPendiente("");
+    setMatriculaInput("");
+    setFilas([]);
   }
 
   async function cargarPosicionesDesdeEstadoActual() {
-    if (!vehiculo) return;
-    const estado = await getEstadoActual(vehiculo.id);
+    let estado = [];
+    if (vehiculo?.id) {
+      estado = await getEstadoActual(vehiculo.id);
+    }
     const nuevasFilas = [];
     for (let i = 1; i <= numPosiciones; i++) {
-      const actual = estado.find((e) => String(e.posicion) === String(i));
+      const actual = estado.find((e) => String(e.posicion) === String(i) && e.tiene_neumatico !== false);
       if (actual) {
         nuevasFilas.push({
           posicion: String(i),
@@ -98,8 +170,33 @@ export default function NuevaPlanilla() {
     setFilas(nuevas);
   }
 
+  // Cambiar de tipo de planilla normaliza las filas: un relevamiento
+  // no admite entra/sale ni procedencia/destino (eso es de movimiento).
+  function cambiarTipo(nuevoTipo) {
+    setTipo(nuevoTipo);
+    if (nuevoTipo === "relevamiento") {
+      setFilas((prev) =>
+        prev.map((f) => ({ ...f, accion: "permanece", procedencia: "", destino: "" }))
+      );
+    }
+  }
+
+  function agregarArchivos(fileList) {
+    setArchivosNuevos((prev) => [...prev, ...Array.from(fileList)]);
+  }
+
+  function quitarArchivoNuevo(idx) {
+    setArchivosNuevos((prev) => prev.filter((_, i) => i !== idx));
+  }
+
+  async function quitarArchivoExistente(adjunto) {
+    if (!confirm(`¿Sacar el archivo "${adjunto.nombre_archivo}"?`)) return;
+    await eliminarAdjunto(adjunto);
+    setAdjuntosExistentes((prev) => prev.filter((a) => a.id !== adjunto.id));
+  }
+
   async function guardar() {
-    if (!vehiculo) {
+    if (!matriculaConfirmada) {
       alert("Primero cargá / buscá la matrícula.");
       return;
     }
@@ -114,26 +211,47 @@ export default function NuevaPlanilla() {
         ...f,
         porcentaje_desgaste: f.porcentaje_desgaste === "" ? null : Number(f.porcentaje_desgaste),
       }));
-      const res = await guardarPlanilla({
-        vehiculo,
-        tipo,
-        fecha,
-        chofer,
-        tipo_vehiculo: tipoVehiculo,
-        km: km === "" ? null : Number(km),
-        modo_carga: filas.length >= numPosiciones ? "completa" : "parcial",
-        observaciones,
-        filas: filasLimpias,
-      });
 
-      // subir adjuntos si hay
-      for (const file of archivos) {
-        await subirAdjunto(res.planilla.id, file);
+      let res;
+      let planillaIdParaAdjuntos;
+
+      if (modoEdicion) {
+        res = await actualizarPlanilla(planillaIdEdicion, {
+          vehiculoId: vehiculo.id,
+          tipo,
+          fecha,
+          chofer,
+          tipo_vehiculo: tipoVehiculo,
+          km: km === "" ? null : Number(km),
+          modo_carga: filas.length >= numPosiciones ? "completa" : "parcial",
+          observaciones,
+          filas: filasLimpias,
+        });
+        planillaIdParaAdjuntos = planillaIdEdicion;
+      } else {
+        res = await guardarPlanilla({
+          matricula: matriculaEfectiva,
+          tipo,
+          fecha,
+          chofer,
+          tipo_vehiculo: tipoVehiculo,
+          km: km === "" ? null : Number(km),
+          modo_carga: filas.length >= numPosiciones ? "completa" : "parcial",
+          observaciones,
+          filas: filasLimpias,
+        });
+        planillaIdParaAdjuntos = res.planilla.id;
+      }
+
+      for (const file of archivosNuevos) {
+        await subirAdjunto(planillaIdParaAdjuntos, file);
       }
 
       setResultado(res);
-      setFilas([]);
-      setArchivos([]);
+      setArchivosNuevos([]);
+      if (!modoEdicion) {
+        setFilas([]);
+      }
     } catch (err) {
       alert("Error al guardar: " + err.message);
     } finally {
@@ -141,41 +259,46 @@ export default function NuevaPlanilla() {
     }
   }
 
+  if (cargandoInicial) {
+    return <p className="text-sm text-slate-500">Cargando planilla...</p>;
+  }
+
   return (
     <div className="space-y-6">
-      <h1 className="text-xl font-semibold">Nueva planilla</h1>
+      <h1 className="text-xl font-semibold">
+        {modoEdicion ? "Editar planilla" : "Nueva planilla"}
+      </h1>
 
       {/* CABECERA */}
       <section className="bg-white border rounded p-4 grid md:grid-cols-3 gap-4">
         <div>
           <label className="block text-sm font-medium mb-1">Matrícula *</label>
-          <div className="flex gap-2">
-            <input
-              className="border rounded px-2 py-1 flex-1"
-              value={matriculaInput}
-              onChange={(e) => setMatriculaInput(e.target.value)}
-              disabled={!!vehiculo}
-            />
-            {!vehiculo && (
-              <button
-                className="bg-slate-900 text-white text-sm px-3 py-1 rounded"
-                onClick={buscarOCrearVehiculo}
-              >
-                Cargar
+          {!matriculaConfirmada ? (
+            <div className="flex gap-2">
+              <input
+                className="border rounded px-2 py-1 flex-1"
+                value={matriculaInput}
+                onChange={(e) => setMatriculaInput(e.target.value)}
+              />
+              <button className="bg-slate-900 text-white text-sm px-3 py-1 rounded" onClick={buscarMatricula}>
+                Buscar
               </button>
-            )}
-            {vehiculo && (
-              <button
-                className="text-sm underline"
-                onClick={() => {
-                  setVehiculo(null);
-                  setFilas([]);
-                }}
-              >
-                cambiar
-              </button>
-            )}
-          </div>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2">
+              <span className="font-medium">{matriculaEfectiva}</span>
+              {!vehiculo && (
+                <span className="text-xs bg-amber-100 text-amber-800 px-2 py-0.5 rounded">
+                  vehículo nuevo: se crea al guardar
+                </span>
+              )}
+              {!modoEdicion && (
+                <button className="text-xs underline" onClick={cambiarMatricula}>
+                  cambiar
+                </button>
+              )}
+            </div>
+          )}
         </div>
 
         <div>
@@ -193,11 +316,15 @@ export default function NuevaPlanilla() {
           <select
             className="border rounded px-2 py-1 w-full"
             value={tipo}
-            onChange={(e) => setTipo(e.target.value)}
+            onChange={(e) => cambiarTipo(e.target.value)}
+            disabled={modoEdicion}
           >
             <option value="relevamiento">Relevamiento</option>
             <option value="movimiento">Movimiento</option>
           </select>
+          {modoEdicion && (
+            <p className="text-xs text-slate-400 mt-1">El tipo no se puede cambiar al editar.</p>
+          )}
         </div>
 
         <div>
@@ -228,7 +355,7 @@ export default function NuevaPlanilla() {
           />
         </div>
 
-        {vehiculo && (
+        {matriculaConfirmada && (
           <div>
             <label className="block text-sm font-medium mb-1">
               Cantidad de posiciones del vehículo
@@ -244,24 +371,32 @@ export default function NuevaPlanilla() {
         )}
       </section>
 
-      {vehiculo && (
+      {matriculaConfirmada && (
         <>
+          {tipo === "relevamiento" ? (
+            <p className="text-xs bg-slate-100 border rounded p-2 text-slate-600">
+              Estás en un <strong>relevamiento</strong>: se registra el estado actual de cada
+              posición (no hay entradas/salidas ni procedencia/destino — eso es de "Movimiento").
+            </p>
+          ) : (
+            <p className="text-xs bg-slate-100 border rounded p-2 text-slate-600">
+              Estás en un <strong>movimiento</strong>: para cambiar una posición agregá una fila
+              con acción "Sale" (indicando destino) y otra con la misma posición y acción "Entra"
+              (indicando procedencia). Las posiciones que no cambian no hace falta cargarlas.
+            </p>
+          )}
+
           {/* ACCIONES SOBRE FILAS */}
           <div className="flex gap-3 flex-wrap">
             <button
               className="bg-white border px-3 py-1.5 rounded text-sm"
               onClick={cargarPosicionesDesdeEstadoActual}
             >
-              Cargar las {numPosiciones} posiciones (con estado actual precargado)
+              Cargar las {numPosiciones} posiciones {vehiculo ? "(con estado actual precargado)" : ""}
             </button>
             <button className="bg-white border px-3 py-1.5 rounded text-sm" onClick={agregarFila}>
               + Agregar fila suelta
             </button>
-            <span className="text-xs text-slate-500 self-center">
-              Para un movimiento parcial: agregá una fila con acción "Sale" (neumático que se
-              retira, indicando destino) y otra fila con la misma posición y acción "Entra"
-              (neumático nuevo, indicando procedencia).
-            </span>
           </div>
 
           {/* TABLA DE FILAS */}
@@ -280,8 +415,8 @@ export default function NuevaPlanilla() {
                   <th>% Desg.</th>
                   <th>Recap.</th>
                   <th>Reparación</th>
-                  <th>Procedencia (si entra)</th>
-                  <th>Destino (si sale)</th>
+                  {tipo === "movimiento" && <th>Procedencia (si entra)</th>}
+                  {tipo === "movimiento" && <th>Destino (si sale)</th>}
                   <th></th>
                 </tr>
               </thead>
@@ -296,17 +431,21 @@ export default function NuevaPlanilla() {
                       />
                     </td>
                     <td>
-                      <select
-                        className="border rounded px-1"
-                        value={f.accion}
-                        onChange={(e) => actualizarFila(idx, "accion", e.target.value)}
-                      >
-                        {ACCIONES.map((a) => (
-                          <option key={a.value} value={a.value}>
-                            {a.label}
-                          </option>
-                        ))}
-                      </select>
+                      {tipo === "movimiento" ? (
+                        <select
+                          className="border rounded px-1"
+                          value={f.accion}
+                          onChange={(e) => actualizarFila(idx, "accion", e.target.value)}
+                        >
+                          {ACCIONES_MOVIMIENTO.map((a) => (
+                            <option key={a.value} value={a.value}>
+                              {a.label}
+                            </option>
+                          ))}
+                        </select>
+                      ) : (
+                        <span className="text-slate-500 text-xs">Permanece</span>
+                      )}
                     </td>
                     <td>
                       <input
@@ -372,22 +511,26 @@ export default function NuevaPlanilla() {
                         onChange={(e) => actualizarFila(idx, "reparacion", e.target.value)}
                       />
                     </td>
-                    <td>
-                      <input
-                        className="border rounded px-1 w-32"
-                        placeholder="Nuevo / Comprado usado / Vehículo X pos.2"
-                        value={f.procedencia}
-                        onChange={(e) => actualizarFila(idx, "procedencia", e.target.value)}
-                      />
-                    </td>
-                    <td>
-                      <input
-                        className="border rounded px-1 w-32"
-                        placeholder="Depósito / Descarte / Vehículo Y pos.3"
-                        value={f.destino}
-                        onChange={(e) => actualizarFila(idx, "destino", e.target.value)}
-                      />
-                    </td>
+                    {tipo === "movimiento" && (
+                      <td>
+                        <input
+                          className="border rounded px-1 w-32"
+                          placeholder="Nuevo / Comprado usado / Vehículo X pos.2"
+                          value={f.procedencia}
+                          onChange={(e) => actualizarFila(idx, "procedencia", e.target.value)}
+                        />
+                      </td>
+                    )}
+                    {tipo === "movimiento" && (
+                      <td>
+                        <input
+                          className="border rounded px-1 w-32"
+                          placeholder="Depósito / Descarte / Vehículo Y pos.3"
+                          value={f.destino}
+                          onChange={(e) => actualizarFila(idx, "destino", e.target.value)}
+                        />
+                      </td>
+                    )}
                     <td>
                       <button className="text-red-600 text-xs" onClick={() => quitarFila(idx)}>
                         quitar
@@ -415,11 +558,47 @@ export default function NuevaPlanilla() {
             <label className="block text-sm font-medium mb-1">
               Archivos adjuntos (PDF, Excel, foto)
             </label>
+
+            {adjuntosExistentes.length > 0 && (
+              <ul className="text-sm mb-2 space-y-1">
+                {adjuntosExistentes.map((a) => (
+                  <li key={a.id} className="flex items-center gap-2">
+                    <a href={a.url} target="_blank" rel="noreferrer" className="underline text-blue-600">
+                      {a.nombre_archivo}
+                    </a>
+                    <button
+                      className="text-red-600 text-xs"
+                      onClick={() => quitarArchivoExistente(a)}
+                    >
+                      quitar
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+
+            {archivosNuevos.length > 0 && (
+              <ul className="text-sm mb-2 space-y-1">
+                {archivosNuevos.map((file, idx) => (
+                  <li key={idx} className="flex items-center gap-2">
+                    <span>{file.name}</span>
+                    <span className="text-xs text-slate-400">(pendiente de subir)</span>
+                    <button className="text-red-600 text-xs" onClick={() => quitarArchivoNuevo(idx)}>
+                      quitar
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+
             <input
               type="file"
               multiple
               accept=".pdf,.xls,.xlsx,image/*"
-              onChange={(e) => setArchivos(Array.from(e.target.files))}
+              onChange={(e) => {
+                agregarArchivos(e.target.files);
+                e.target.value = "";
+              }}
             />
           </section>
 
@@ -428,13 +607,15 @@ export default function NuevaPlanilla() {
             onClick={guardar}
             className="bg-emerald-600 text-white px-5 py-2 rounded disabled:opacity-50"
           >
-            {guardando ? "Guardando..." : "Guardar planilla"}
+            {guardando ? "Guardando..." : modoEdicion ? "Guardar cambios" : "Guardar planilla"}
           </button>
 
           {resultado && (
             <div className="bg-emerald-50 border border-emerald-200 rounded p-4 space-y-2">
-              <p className="font-medium">Planilla guardada correctamente ✅</p>
-              {resultado.planilla.informe_automatico && (
+              <p className="font-medium">
+                {modoEdicion ? "Planilla actualizada correctamente ✅" : "Planilla guardada correctamente ✅"}
+              </p>
+              {resultado.planilla?.informe_automatico && (
                 <div className="text-sm whitespace-pre-line">
                   <strong>Informe automático:</strong>
                   {"\n" + resultado.planilla.informe_automatico}
@@ -451,5 +632,13 @@ export default function NuevaPlanilla() {
         </>
       )}
     </div>
+  );
+}
+
+export default function NuevaPlanilla() {
+  return (
+    <Suspense fallback={<p className="text-sm text-slate-500">Cargando...</p>}>
+      <NuevaPlanillaInner />
+    </Suspense>
   );
 }
