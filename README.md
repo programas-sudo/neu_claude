@@ -86,9 +86,13 @@ Esto es clave para tu flujo de trabajo:
 - **Cambios de base de datos** (agregar una columna, una tabla, un campo
   nuevo, etc.): abrís el **mismo** proyecto de Supabase → SQL Editor → corrés
   el `ALTER TABLE` o `CREATE TABLE` que corresponda. Es buena práctica ir
-  guardando estos cambios como archivos nuevos en `supabase/` (por ejemplo
-  `supabase/migrations/002_agrego_campo_x.sql`) para tener un historial, pero
-  se ejecutan sobre el mismo proyecto de siempre.
+  guardando estos cambios como archivos nuevos en `supabase/migrations/` (por
+  ejemplo `supabase/migrations/002_correcciones.sql`) para tener un
+  historial, pero se ejecutan sobre el mismo proyecto de siempre.
+
+  Ya existe `supabase/migrations/002_correcciones.sql` con la primera tanda
+  de correcciones (ver más abajo). Se corre una sola vez, pegando su
+  contenido completo en el SQL Editor de Supabase.
 
 - **Local, antes de subir cambios**:
   ```bash
