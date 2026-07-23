@@ -4,6 +4,7 @@ import { useState } from "react";
 import {
   buscarNeumaticosPorIdentificador,
   getHistorialNeumatico,
+  getUbicacionVigente,
 } from "../../lib/traceability";
 
 export default function BuscarSerie() {
@@ -37,14 +38,7 @@ export default function BuscarSerie() {
     }
   }
 
-  // detectar el último "instante" en que este neumático entró a su posición actual
-  const filaInstalacionActual = (() => {
-    // buscar de atrás hacia adelante la última fila que no sea "sale"
-    for (let i = filas.length - 1; i >= 0; i--) {
-      if (filas[i].accion !== "sale") return filas[i];
-    }
-    return null;
-  })();
+  const vigente = getUbicacionVigente(filas);
 
   return (
     <div className="space-y-6">
@@ -103,11 +97,18 @@ export default function BuscarSerie() {
             </button>
           </div>
 
-          {filaInstalacionActual && (
+          {vigente && vigente.instalado && (
             <div className="bg-emerald-50 border border-emerald-200 rounded p-3 text-sm">
-              <strong>Instalación vigente:</strong> desde el {filaInstalacionActual.fecha}{" "}
-              en {filaInstalacionActual.matricula}, posición{" "}
-              {filaInstalacionActual.posicion || "-"}.
+              <strong>Instalación vigente:</strong> desde el {vigente.fecha} en {vigente.matricula},
+              posición {vigente.posicion || "-"}.
+            </div>
+          )}
+          {vigente && !vigente.instalado && (
+            <div className="bg-red-50 border border-red-200 rounded p-3 text-sm text-red-700">
+              <strong>Sin ubicación actual:</strong> salió de {vigente.matricula} posición{" "}
+              {vigente.posicion || "-"} el {vigente.fecha}
+              {vigente.destino ? ` (destino: ${vigente.destino})` : ""}. No se registró que haya
+              vuelto a entrar en ningún vehículo.
             </div>
           )}
 
