@@ -74,9 +74,7 @@ export default function BuscarSerie() {
       <p className="text-sm text-slate-500">
         Un neumático se identifica por la combinación de <strong>marca + medida + (número de
         serie o DOT)</strong> — puede haber dos neumáticos con el mismo número de serie pero de
-        marcas distintas, así que cuantos más campos completes, más precisa la búsqueda. Útil,
-        por ejemplo, cuando un neumático se rompe y querés saber hace cuánto fue colocado, o si
-        tuvo algún recapado o reparación previa.
+        marcas distintas, así que cuantos más campos completes, más precisa la búsqueda.
       </p>
 
       <form onSubmit={buscar} className="bg-white border rounded p-4 grid md:grid-cols-4 gap-3">
