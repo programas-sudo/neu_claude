@@ -5,7 +5,7 @@ import {
   buscarVehiculosPorMatricula,
   getEstadoActual,
   getHistorialPlanillas,
-  getHistorialNeumatico,
+  getHistorialNeumaticoExacto,
   getUbicacionVigente,
   getHistorialGlobal,
 } from "../../lib/traceability";
@@ -57,8 +57,7 @@ export default function BuscarMatricula() {
   }
 
   async function verTrayecto(fila) {
-    const id = fila.numero_serie || fila.dot;
-    if (!id) {
+    if (!fila.numero_serie && !fila.dot) {
       alert(
         "Este neumático no tiene número de serie ni DOT registrado: no es posible trazarlo. Solo se conservan sus datos (marca, modelo, medida, estado) en el momento consultado."
       );
@@ -66,8 +65,16 @@ export default function BuscarMatricula() {
     }
     setCargando(true);
     try {
-      const filas = await getHistorialNeumatico(id);
-      setTrayecto({ identificador: id, filas });
+      const filas = await getHistorialNeumaticoExacto({
+        marca: fila.marca,
+        medida: fila.medida,
+        numero_serie: fila.numero_serie,
+        dot: fila.dot,
+      });
+      const identificador = [fila.marca, fila.medida, fila.numero_serie || fila.dot]
+        .filter(Boolean)
+        .join(" / ");
+      setTrayecto({ identificador, filas });
     } finally {
       setCargando(false);
     }
