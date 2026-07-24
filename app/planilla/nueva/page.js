@@ -157,7 +157,17 @@ function NuevaPlanillaInner() {
   }
 
   function agregarFila() {
-    setFilas([...filas, filaVacia()]);
+    const ultima = filas[filas.length - 1];
+    // Una fila nueva arranca con marca/modelo/medida de la última fila
+    // cargada (lo más común es que se repita), pero vos podés borrarlo
+    // o cambiarlo sin problema — no afecta a ninguna fila ya existente.
+    const base = filaVacia();
+    if (ultima) {
+      base.marca = ultima.marca;
+      base.modelo = ultima.modelo;
+      base.medida = ultima.medida;
+    }
+    setFilas([...filas, base]);
   }
 
   function quitarFila(idx) {
@@ -168,6 +178,15 @@ function NuevaPlanillaInner() {
     const nuevas = [...filas];
     nuevas[idx] = { ...nuevas[idx], [campo]: valor };
     setFilas(nuevas);
+  }
+
+  // Copia el valor de un campo (marca/modelo/medida/estado) de esta fila
+  // hacia todas las filas de ABAJO. Es una acción explícita (un clic),
+  // nunca se dispara sola, y no te obliga a borrar nada: cualquier fila
+  // de abajo la podés volver a editar a mano después sin problema.
+  function copiarHaciaAbajo(idx, campo) {
+    const valor = filas[idx][campo];
+    setFilas((prev) => prev.map((f, i) => (i > idx ? { ...f, [campo]: valor } : f)));
   }
 
   // Cambiar de tipo de planilla normaliza las filas: un relevamiento
@@ -483,25 +502,61 @@ function NuevaPlanillaInner() {
                       )}
                     </td>
                     <td>
-                      <input
-                        className="border rounded px-1 w-20"
-                        value={f.marca}
-                        onChange={(e) => actualizarFila(idx, "marca", e.target.value)}
-                      />
+                      <div className="flex items-center gap-1">
+                        <input
+                          className="border rounded px-1 w-20"
+                          value={f.marca}
+                          onChange={(e) => actualizarFila(idx, "marca", e.target.value)}
+                        />
+                        {idx < filas.length - 1 && f.marca && (
+                          <button
+                            type="button"
+                            title="Copiar esta marca a las filas de abajo"
+                            className="text-slate-400 hover:text-slate-700"
+                            onClick={() => copiarHaciaAbajo(idx, "marca")}
+                          >
+                            ↓
+                          </button>
+                        )}
+                      </div>
                     </td>
                     <td>
-                      <input
-                        className="border rounded px-1 w-20"
-                        value={f.modelo}
-                        onChange={(e) => actualizarFila(idx, "modelo", e.target.value)}
-                      />
+                      <div className="flex items-center gap-1">
+                        <input
+                          className="border rounded px-1 w-20"
+                          value={f.modelo}
+                          onChange={(e) => actualizarFila(idx, "modelo", e.target.value)}
+                        />
+                        {idx < filas.length - 1 && f.modelo && (
+                          <button
+                            type="button"
+                            title="Copiar este modelo a las filas de abajo"
+                            className="text-slate-400 hover:text-slate-700"
+                            onClick={() => copiarHaciaAbajo(idx, "modelo")}
+                          >
+                            ↓
+                          </button>
+                        )}
+                      </div>
                     </td>
                     <td>
-                      <input
-                        className="border rounded px-1 w-20"
-                        value={f.medida}
-                        onChange={(e) => actualizarFila(idx, "medida", e.target.value)}
-                      />
+                      <div className="flex items-center gap-1">
+                        <input
+                          className="border rounded px-1 w-20"
+                          value={f.medida}
+                          onChange={(e) => actualizarFila(idx, "medida", e.target.value)}
+                        />
+                        {idx < filas.length - 1 && f.medida && (
+                          <button
+                            type="button"
+                            title="Copiar esta medida a las filas de abajo"
+                            className="text-slate-400 hover:text-slate-700"
+                            onClick={() => copiarHaciaAbajo(idx, "medida")}
+                          >
+                            ↓
+                          </button>
+                        )}
+                      </div>
                     </td>
                     <td>
                       <input
@@ -518,11 +573,23 @@ function NuevaPlanillaInner() {
                       />
                     </td>
                     <td>
-                      <input
-                        className="border rounded px-1 w-20"
-                        value={f.estado}
-                        onChange={(e) => actualizarFila(idx, "estado", e.target.value)}
-                      />
+                      <div className="flex items-center gap-1">
+                        <input
+                          className="border rounded px-1 w-20"
+                          value={f.estado}
+                          onChange={(e) => actualizarFila(idx, "estado", e.target.value)}
+                        />
+                        {idx < filas.length - 1 && f.estado && (
+                          <button
+                            type="button"
+                            title="Copiar este estado a las filas de abajo"
+                            className="text-slate-400 hover:text-slate-700"
+                            onClick={() => copiarHaciaAbajo(idx, "estado")}
+                          >
+                            ↓
+                          </button>
+                        )}
+                      </div>
                     </td>
                     <td>
                       <input
