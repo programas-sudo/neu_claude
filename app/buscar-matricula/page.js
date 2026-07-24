@@ -20,6 +20,9 @@ export default function BuscarMatricula() {
   const [trayecto, setTrayecto] = useState(null);
   const [cargando, setCargando] = useState(false);
   const [historialGlobal, setHistorialGlobal] = useState([]);
+  const [filtroDesde, setFiltroDesde] = useState("");
+  const [filtroHasta, setFiltroHasta] = useState("");
+  const [filtroTipo, setFiltroTipo] = useState("todos");
   const [busquedaRealizada, setBusquedaRealizada] = useState(false);
 
   // Se carga solo, apenas entrás a la pantalla, sin apretar "Buscar"
@@ -46,6 +49,9 @@ export default function BuscarMatricula() {
   async function seleccionarVehiculo(v) {
     setVehiculo(v);
     setTrayecto(null);
+    setFiltroDesde("");
+    setFiltroHasta("");
+    setFiltroTipo("todos");
     setCargando(true);
     try {
       const [estado, hist] = await Promise.all([getEstadoActual(v.id), getHistorialPlanillas(v.id)]);
@@ -79,6 +85,11 @@ export default function BuscarMatricula() {
       setCargando(false);
     }
   }
+
+  const historialFiltrado = historial
+    .filter((p) => !filtroDesde || p.fecha >= filtroDesde)
+    .filter((p) => !filtroHasta || p.fecha <= filtroHasta)
+    .filter((p) => filtroTipo === "todos" || p.tipo === filtroTipo);
 
   return (
     <div className="space-y-6">
@@ -277,9 +288,48 @@ export default function BuscarMatricula() {
 
           {/* HISTORIAL CRONOLÓGICO DE PLANILLAS (más reciente primero) */}
           <section>
-            <h3 className="font-medium mb-2">Historial de planillas cargadas (más reciente primero)</h3>
+            <div className="flex items-center justify-between flex-wrap gap-2 mb-2">
+              <h3 className="font-medium">Historial de planillas cargadas (más reciente primero)</h3>
+              <div className="flex items-center gap-2 text-sm">
+                <label className="text-slate-500">Desde</label>
+                <input
+                  type="date"
+                  className="border rounded px-2 py-1"
+                  value={filtroDesde}
+                  onChange={(e) => setFiltroDesde(e.target.value)}
+                />
+                <label className="text-slate-500">Hasta</label>
+                <input
+                  type="date"
+                  className="border rounded px-2 py-1"
+                  value={filtroHasta}
+                  onChange={(e) => setFiltroHasta(e.target.value)}
+                />
+                <select
+                  className="border rounded px-2 py-1"
+                  value={filtroTipo}
+                  onChange={(e) => setFiltroTipo(e.target.value)}
+                >
+                  <option value="todos">Todos los tipos</option>
+                  <option value="relevamiento">Relevamiento</option>
+                  <option value="movimiento">Movimiento</option>
+                </select>
+                {(filtroDesde || filtroHasta || filtroTipo !== "todos") && (
+                  <button
+                    className="text-xs underline text-slate-500"
+                    onClick={() => {
+                      setFiltroDesde("");
+                      setFiltroHasta("");
+                      setFiltroTipo("todos");
+                    }}
+                  >
+                    limpiar filtros
+                  </button>
+                )}
+              </div>
+            </div>
             <div className="space-y-4">
-              {historial.map((p) => (
+              {historialFiltrado.map((p) => (
                 <div key={p.id} className="bg-white border rounded p-4">
                   <div className="flex justify-between items-start">
                     <div>
@@ -369,6 +419,11 @@ export default function BuscarMatricula() {
                   )}
                 </div>
               ))}
+              {historialFiltrado.length === 0 && historial.length > 0 && (
+                <p className="text-sm text-slate-400">
+                  No hay planillas que coincidan con estos filtros.
+                </p>
+              )}
               {historial.length === 0 && (
                 <p className="text-sm text-slate-400">Sin planillas cargadas todavía.</p>
               )}
