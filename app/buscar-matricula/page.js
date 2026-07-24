@@ -23,6 +23,7 @@ export default function BuscarMatricula() {
   const [filtroDesde, setFiltroDesde] = useState("");
   const [filtroHasta, setFiltroHasta] = useState("");
   const [filtroTipo, setFiltroTipo] = useState("todos");
+  const [filtroRecapReparacion, setFiltroRecapReparacion] = useState(false);
   const [busquedaRealizada, setBusquedaRealizada] = useState(false);
 
   // Se carga solo, apenas entrás a la pantalla, sin apretar "Buscar"
@@ -52,6 +53,7 @@ export default function BuscarMatricula() {
     setFiltroDesde("");
     setFiltroHasta("");
     setFiltroTipo("todos");
+    setFiltroRecapReparacion(false);
     setCargando(true);
     try {
       const [estado, hist] = await Promise.all([getEstadoActual(v.id), getHistorialPlanillas(v.id)]);
@@ -89,7 +91,12 @@ export default function BuscarMatricula() {
   const historialFiltrado = historial
     .filter((p) => !filtroDesde || p.fecha >= filtroDesde)
     .filter((p) => !filtroHasta || p.fecha <= filtroHasta)
-    .filter((p) => filtroTipo === "todos" || p.tipo === filtroTipo);
+    .filter((p) => filtroTipo === "todos" || p.tipo === filtroTipo)
+    .filter(
+      (p) =>
+        !filtroRecapReparacion ||
+        (p.planilla_neumaticos || []).some((f) => f.recapado || (f.reparacion && f.reparacion.trim()))
+    );
 
   return (
     <div className="space-y-6">
@@ -194,6 +201,8 @@ export default function BuscarMatricula() {
                   <th>N° Serie / DOT</th>
                   <th>Estado</th>
                   <th>% Desgaste</th>
+                  <th>Recapado</th>
+                  <th>Reparación</th>
                   <th></th>
                 </tr>
               </thead>
@@ -202,7 +211,7 @@ export default function BuscarMatricula() {
                   f.tiene_neumatico === false ? (
                     <tr key={f.posicion} className="bg-red-50">
                       <td>{f.posicion}</td>
-                      <td colSpan={6} className="text-red-700 font-medium">
+                      <td colSpan={8} className="text-red-700 font-medium">
                         SIN NEUMÁTICO (desde {f.fecha_ultimo_reporte}
                         {f.destino ? `, destino: ${f.destino}` : ""})
                       </td>
@@ -218,6 +227,8 @@ export default function BuscarMatricula() {
                       </td>
                       <td>{f.estado}</td>
                       <td>{f.porcentaje_desgaste != null ? `${f.porcentaje_desgaste}%` : "-"}</td>
+                      <td>{f.recapado ? "Sí" : "No"}</td>
+                      <td>{f.reparacion || "-"}</td>
                       <td>
                         <button className="text-blue-600 text-xs underline" onClick={() => verTrayecto(f)}>
                           ver trayecto
@@ -228,7 +239,7 @@ export default function BuscarMatricula() {
                 )}
                 {estadoActual.length === 0 && (
                   <tr>
-                    <td colSpan={8} className="text-center text-slate-400">
+                    <td colSpan={10} className="text-center text-slate-400">
                       Sin datos cargados todavía para este vehículo.
                     </td>
                   </tr>
@@ -314,13 +325,22 @@ export default function BuscarMatricula() {
                   <option value="relevamiento">Relevamiento</option>
                   <option value="movimiento">Movimiento</option>
                 </select>
-                {(filtroDesde || filtroHasta || filtroTipo !== "todos") && (
+                <label className="flex items-center gap-1 text-slate-600">
+                  <input
+                    type="checkbox"
+                    checked={filtroRecapReparacion}
+                    onChange={(e) => setFiltroRecapReparacion(e.target.checked)}
+                  />
+                  Con recapado/reparación
+                </label>
+                {(filtroDesde || filtroHasta || filtroTipo !== "todos" || filtroRecapReparacion) && (
                   <button
                     className="text-xs underline text-slate-500"
                     onClick={() => {
                       setFiltroDesde("");
                       setFiltroHasta("");
                       setFiltroTipo("todos");
+                      setFiltroRecapReparacion(false);
                     }}
                   >
                     limpiar filtros
