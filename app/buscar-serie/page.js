@@ -5,6 +5,7 @@ import {
   buscarNeumaticosAvanzado,
   getHistorialNeumaticoExacto,
   getUbicacionVigente,
+  getProveedorNeumatico,
 } from "../../lib/traceability";
 
 export default function BuscarSerie() {
@@ -15,6 +16,7 @@ export default function BuscarSerie() {
   const [resultados, setResultados] = useState([]);
   const [seleccionado, setSeleccionado] = useState(null);
   const [filas, setFilas] = useState([]);
+  const [proveedor, setProveedor] = useState(null);
   const [cargando, setCargando] = useState(false);
   const [busco, setBusco] = useState(false);
 
@@ -44,13 +46,22 @@ export default function BuscarSerie() {
     setSeleccionado(item);
     setCargando(true);
     try {
-      const data = await getHistorialNeumaticoExacto({
-        marca: item.marca,
-        medida: item.medida,
-        numero_serie: item.numero_serie,
-        dot: item.dot,
-      });
+      const [data, prov] = await Promise.all([
+        getHistorialNeumaticoExacto({
+          marca: item.marca,
+          medida: item.medida,
+          numero_serie: item.numero_serie,
+          dot: item.dot,
+        }),
+        getProveedorNeumatico({
+          marca: item.marca,
+          medida: item.medida,
+          numero_serie: item.numero_serie,
+          dot: item.dot,
+        }),
+      ]);
       setFilas(data);
+      setProveedor(prov);
     } finally {
       setCargando(false);
     }
@@ -60,6 +71,7 @@ export default function BuscarSerie() {
     setSeleccionado(null);
     setResultados([]);
     setBusco(false);
+    setProveedor(null);
     setMarca("");
     setMedida("");
     setNumeroSerie("");
@@ -158,6 +170,16 @@ export default function BuscarSerie() {
             </button>
           </div>
 
+          {proveedor && (
+            <p className="text-sm">
+              <strong>Proveedor:</strong> {proveedor}
+              <span className="text-slate-500">
+                {" "}
+                (dato del neumático, no implica que se haya comprado en la fecha en que se cargó)
+              </span>
+            </p>
+          )}
+
           {vigente && (
             <div
               className={`border rounded p-3 text-sm ${
@@ -216,4 +238,3 @@ export default function BuscarSerie() {
     </div>
   );
 }
-
