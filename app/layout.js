@@ -23,6 +23,9 @@ export default function RootLayout({ children }) {
             <a href="/planilla/nueva" className="hover:underline">
               Nueva planilla
             </a>
+            <a href="/stock" className="hover:underline">
+              Stock
+            </a>
           </nav>
         </header>
         <main className="p-6 max-w-6xl mx-auto">{children}</main>
