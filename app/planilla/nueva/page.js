@@ -34,6 +34,7 @@ function filaVacia(posicion = "") {
     reparacion: "",
     procedencia: "",
     destino: "",
+    proveedor: "",
   };
 }
 
@@ -453,6 +454,13 @@ function NuevaPlanillaInner() {
             </button>
           </div>
 
+          <p className="text-xs text-slate-500">
+            El campo "Proveedor" queda como dato del neumático (su origen), no como fecha de
+            compra: si lo cargás recién ahora para un neumático que ya estaba puesto hace tiempo,
+            el sistema lo va a mostrar como el proveedor de ese neumático, no como si se hubiera
+            comprado hoy.
+          </p>
+
           {/* TABLA DE FILAS */}
           <div className="overflow-x-auto">
             <table>
@@ -471,6 +479,7 @@ function NuevaPlanillaInner() {
                   <th>Reparación</th>
                   {tipo === "movimiento" && <th>Procedencia (si entra)</th>}
                   {tipo === "movimiento" && <th>Destino (si sale)</th>}
+                  <th>Proveedor</th>
                   <th></th>
                 </tr>
               </thead>
@@ -634,6 +643,25 @@ function NuevaPlanillaInner() {
                       </td>
                     )}
                     <td>
+                      <div className="flex items-center gap-1">
+                        <input
+                          className="border rounded px-1 w-24"
+                          value={f.proveedor}
+                          onChange={(e) => actualizarFila(idx, "proveedor", e.target.value)}
+                        />
+                        {idx < filas.length - 1 && f.proveedor && (
+                          <button
+                            type="button"
+                            title="Copiar este proveedor a las filas de abajo"
+                            className="text-slate-400 hover:text-slate-700"
+                            onClick={() => copiarHaciaAbajo(idx, "proveedor")}
+                          >
+                            ↓
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                    <td>
                       <button className="text-red-600 text-xs" onClick={() => quitarFila(idx)}>
                         quitar
                       </button>
@@ -717,12 +745,6 @@ function NuevaPlanillaInner() {
               <p className="font-medium">
                 {modoEdicion ? "Planilla actualizada correctamente ✅" : "Planilla guardada correctamente ✅"}
               </p>
-              {resultado.planilla?.informe_automatico && (
-                <div className="text-sm whitespace-pre-line">
-                  <strong>Informe automático:</strong>
-                  {"\n" + resultado.planilla.informe_automatico}
-                </div>
-              )}
               {resultado.avisos && resultado.avisos.length > 0 && (
                 <div className="text-sm text-amber-700 whitespace-pre-line">
                   <strong>Avisos de consistencia:</strong>
