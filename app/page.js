@@ -17,10 +17,15 @@ export default function Home() {
       titulo: "Nueva planilla",
       texto: "Cargar un relevamiento o un movimiento de neumáticos.",
     },
+    {
+      href: "/stock",
+      titulo: "Stock",
+      texto: "Ver los neumáticos comprados que están guardados en almacén, sin instalar.",
+    },
   ];
 
   return (
-    <div className="grid md:grid-cols-3 gap-4">
+    <div className="grid md:grid-cols-4 gap-4">
       {opciones.map((o) => (
         <a
           key={o.href}
