@@ -7,6 +7,7 @@ import {
   getHistorialPlanillas,
   getHistorialNeumaticoExacto,
   getUbicacionVigente,
+  getProveedorNeumatico,
   getHistorialGlobal,
 } from "../../lib/traceability";
 import { exportarPlanillaPDF, exportarEstadoActualPDF } from "../../lib/pdf";
@@ -24,6 +25,7 @@ export default function BuscarMatricula() {
   const [filtroHasta, setFiltroHasta] = useState("");
   const [filtroTipo, setFiltroTipo] = useState("todos");
   const [filtroRecapReparacion, setFiltroRecapReparacion] = useState(false);
+  const [filtroObservaciones, setFiltroObservaciones] = useState("");
   const [busquedaRealizada, setBusquedaRealizada] = useState(false);
 
   // Se carga solo, apenas entrás a la pantalla, sin apretar "Buscar"
@@ -54,6 +56,7 @@ export default function BuscarMatricula() {
     setFiltroHasta("");
     setFiltroTipo("todos");
     setFiltroRecapReparacion(false);
+    setFiltroObservaciones("");
     setCargando(true);
     try {
       const [estado, hist] = await Promise.all([getEstadoActual(v.id), getHistorialPlanillas(v.id)]);
@@ -73,16 +76,20 @@ export default function BuscarMatricula() {
     }
     setCargando(true);
     try {
-      const filas = await getHistorialNeumaticoExacto({
+      const datosTire = {
         marca: fila.marca,
         medida: fila.medida,
         numero_serie: fila.numero_serie,
         dot: fila.dot,
-      });
+      };
+      const [filas, proveedor] = await Promise.all([
+        getHistorialNeumaticoExacto(datosTire),
+        getProveedorNeumatico(datosTire),
+      ]);
       const identificador = [fila.marca, fila.medida, fila.numero_serie || fila.dot]
         .filter(Boolean)
         .join(" / ");
-      setTrayecto({ identificador, filas });
+      setTrayecto({ identificador, filas, proveedor });
     } finally {
       setCargando(false);
     }
@@ -96,6 +103,11 @@ export default function BuscarMatricula() {
       (p) =>
         !filtroRecapReparacion ||
         (p.planilla_neumaticos || []).some((f) => f.recapado || (f.reparacion && f.reparacion.trim()))
+    )
+    .filter(
+      (p) =>
+        !filtroObservaciones.trim() ||
+        (p.observaciones || "").toLowerCase().includes(filtroObservaciones.trim().toLowerCase())
     );
 
   return (
@@ -203,6 +215,7 @@ export default function BuscarMatricula() {
                   <th>% Desgaste</th>
                   <th>Recapado</th>
                   <th>Reparación</th>
+                  <th>Proveedor</th>
                   <th></th>
                 </tr>
               </thead>
@@ -211,7 +224,7 @@ export default function BuscarMatricula() {
                   f.tiene_neumatico === false ? (
                     <tr key={f.posicion} className="bg-red-50">
                       <td>{f.posicion}</td>
-                      <td colSpan={8} className="text-red-700 font-medium">
+                      <td colSpan={9} className="text-red-700 font-medium">
                         SIN NEUMÁTICO (desde {f.fecha_ultimo_reporte}
                         {f.destino ? `, destino: ${f.destino}` : ""})
                       </td>
@@ -229,6 +242,7 @@ export default function BuscarMatricula() {
                       <td>{f.porcentaje_desgaste != null ? `${f.porcentaje_desgaste}%` : "-"}</td>
                       <td>{f.recapado ? "Sí" : "No"}</td>
                       <td>{f.reparacion || "-"}</td>
+                      <td>{f.proveedor_origen || "-"}</td>
                       <td>
                         <button className="text-blue-600 text-xs underline" onClick={() => verTrayecto(f)}>
                           ver trayecto
@@ -239,7 +253,7 @@ export default function BuscarMatricula() {
                 )}
                 {estadoActual.length === 0 && (
                   <tr>
-                    <td colSpan={10} className="text-center text-slate-400">
+                    <td colSpan={11} className="text-center text-slate-400">
                       Sin datos cargados todavía para este vehículo.
                     </td>
                   </tr>
@@ -252,6 +266,15 @@ export default function BuscarMatricula() {
           {trayecto && (
             <section className="bg-amber-50 border border-amber-200 rounded p-4">
               <h3 className="font-medium mb-2">Trayecto del neumático {trayecto.identificador}</h3>
+              {trayecto.proveedor && (
+                <p className="text-sm mb-2">
+                  <strong>Proveedor:</strong> {trayecto.proveedor}
+                  <span className="text-slate-500">
+                    {" "}
+                    (dato del neumático, no implica que se haya comprado en la fecha en que se cargó)
+                  </span>
+                </p>
+              )}
               {(() => {
                 const vigente = getUbicacionVigente(trayecto.filas);
                 return vigente && !vigente.instalado ? (
@@ -333,7 +356,14 @@ export default function BuscarMatricula() {
                   />
                   Con recapado/reparación
                 </label>
-                {(filtroDesde || filtroHasta || filtroTipo !== "todos" || filtroRecapReparacion) && (
+                <input
+                  type="text"
+                  placeholder="Buscar en observaciones..."
+                  className="border rounded px-2 py-1"
+                  value={filtroObservaciones}
+                  onChange={(e) => setFiltroObservaciones(e.target.value)}
+                />
+                {(filtroDesde || filtroHasta || filtroTipo !== "todos" || filtroRecapReparacion || filtroObservaciones) && (
                   <button
                     className="text-xs underline text-slate-500"
                     onClick={() => {
@@ -341,6 +371,7 @@ export default function BuscarMatricula() {
                       setFiltroHasta("");
                       setFiltroTipo("todos");
                       setFiltroRecapReparacion(false);
+                      setFiltroObservaciones("");
                     }}
                   >
                     limpiar filtros
@@ -406,13 +437,6 @@ export default function BuscarMatricula() {
                       ))}
                     </tbody>
                   </table>
-
-                  {p.informe_automatico && (
-                    <div className="mt-3 text-sm bg-blue-50 border border-blue-100 rounded p-3 whitespace-pre-line">
-                      <strong>Informe automático:</strong>
-                      {"\n" + p.informe_automatico}
-                    </div>
-                  )}
 
                   {p.observaciones && (
                     <div className="mt-2 text-sm bg-slate-50 border rounded p-3 whitespace-pre-line">
