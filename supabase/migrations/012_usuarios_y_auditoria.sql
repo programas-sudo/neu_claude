@@ -3,7 +3,7 @@
 -- Ejecutar en: Supabase Dashboard > SQL Editor > New query
 -- =========================================================
 
-create extension if not exists pgcrypto;
+create extension if not exists pgcrypto with schema extensions;
 
 -- ---------------------------------------------------------
 -- 1) USUARIOS
@@ -40,7 +40,7 @@ create or replace function verificar_pin(p_usuario_id uuid, p_pin text)
 returns boolean
 language sql
 security definer
-set search_path = public
+set search_path = public, extensions
 as $$
   select pin_hash = crypt(p_pin, pin_hash)
   from usuarios
@@ -51,7 +51,7 @@ create or replace function crear_o_actualizar_pin(p_usuario_id uuid, p_pin text)
 returns void
 language sql
 security definer
-set search_path = public
+set search_path = public, extensions
 as $$
   update usuarios set pin_hash = crypt(p_pin, gen_salt('bf')) where id = p_usuario_id;
 $$;
