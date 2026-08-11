@@ -2,6 +2,8 @@
 
 import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
+import VolverAtras from "../../../components/VolverAtras";
+import { useSesion } from "../../../components/AuthProvider";
 import {
   buscarVehiculoExacto,
   getVehiculoPorId,
@@ -39,6 +41,7 @@ function filaVacia(posicion = "") {
 }
 
 function NuevaPlanillaInner() {
+  const { usuarioActual } = useSesion();
   const searchParams = useSearchParams();
   const planillaIdEdicion = searchParams.get("id");
   const modoEdicion = !!planillaIdEdicion;
@@ -58,6 +61,8 @@ function NuevaPlanillaInner() {
   const [km, setKm] = useState("");
   const [observaciones, setObservaciones] = useState("");
   const [filas, setFilas] = useState([]);
+  const [filaActivaIdx, setFilaActivaIdx] = useState(null);
+  const [filaArrastrada, setFilaArrastrada] = useState(null);
   const [guardando, setGuardando] = useState(false);
   const [resultado, setResultado] = useState(null);
   const [archivosNuevos, setArchivosNuevos] = useState([]);
@@ -111,11 +116,17 @@ function NuevaPlanillaInner() {
       setTipoVehiculo(encontrado.tipo_vehiculo || "");
       setNumPosiciones(encontrado.num_posiciones || 4);
       setMatriculaPendiente("");
+      setMatriculaConfirmada(true);
     } else {
+      const patenteNueva = matriculaInput.trim().toUpperCase();
+      const confirma = window.confirm(
+        `No existe ningún vehículo con la patente "${patenteNueva}". ¿Confirmás que está bien escrita y querés crear uno nuevo?`
+      );
+      if (!confirma) return; // no avanza: revisá lo que escribiste
       setVehiculo(null);
-      setMatriculaPendiente(matriculaInput.trim().toUpperCase());
+      setMatriculaPendiente(patenteNueva);
+      setMatriculaConfirmada(true);
     }
-    setMatriculaConfirmada(true);
   }
 
   function cambiarMatricula() {
@@ -175,6 +186,23 @@ function NuevaPlanillaInner() {
     setFilas(filas.filter((_, i) => i !== idx));
   }
 
+  // Arrastrar y soltar filas para reordenarlas (el orden real de carga
+  // importa: define, por ejemplo, quién "gana" si sale y entra quedan
+  // registrados en el mismo instante).
+  function soltarFilaEn(idxDestino) {
+    if (filaArrastrada === null || filaArrastrada === idxDestino) {
+      setFilaArrastrada(null);
+      return;
+    }
+    setFilas((prev) => {
+      const nuevas = [...prev];
+      const [movida] = nuevas.splice(filaArrastrada, 1);
+      nuevas.splice(idxDestino, 0, movida);
+      return nuevas;
+    });
+    setFilaArrastrada(null);
+  }
+
   function actualizarFila(idx, campo, valor) {
     const nuevas = [...filas];
     nuevas[idx] = { ...nuevas[idx], [campo]: valor };
@@ -232,7 +260,7 @@ function NuevaPlanillaInner() {
 
   async function guardar() {
     if (!matriculaConfirmada) {
-      alert("Primero cargá / buscá la matrícula.");
+      alert("Primero cargá / buscá la patente.");
       return;
     }
     if (filas.length === 0) {
@@ -274,6 +302,7 @@ function NuevaPlanillaInner() {
           modo_carga: filas.length >= numPosiciones ? "completa" : "parcial",
           observaciones,
           filas: filasLimpias,
+          usuario: usuarioActual,
         });
         planillaIdParaAdjuntos = res.planilla.id;
       }
@@ -320,6 +349,7 @@ function NuevaPlanillaInner() {
 
   return (
     <div className="space-y-6">
+      <VolverAtras />
       <h1 className="text-xl font-semibold">
         {modoEdicion ? "Editar planilla" : "Nueva planilla"}
       </h1>
@@ -327,7 +357,7 @@ function NuevaPlanillaInner() {
       {/* CABECERA */}
       <section className="bg-white border rounded p-4 grid md:grid-cols-3 gap-4">
         <div>
-          <label className="block text-sm font-medium mb-1">Matrícula *</label>
+          <label className="block text-sm font-medium mb-1">Patente *</label>
           {!matriculaConfirmada ? (
             <div className="flex gap-2">
               <input
@@ -461,12 +491,18 @@ function NuevaPlanillaInner() {
             comprado hoy.
           </p>
 
+          <p className="text-xs text-slate-500">
+            Arrastrá el ⋮⋮ de la izquierda para reordenar las filas. La fila donde estás
+            parada se resalta, y la posición queda fija al desplazarte hacia la derecha.
+          </p>
+
           {/* TABLA DE FILAS */}
           <div className="overflow-x-auto">
             <table>
               <thead>
                 <tr>
-                  <th>Pos.</th>
+                  <th className="sticky left-0 bg-slate-100 z-20 w-8"></th>
+                  <th className="sticky left-8 bg-slate-100 z-20">Pos.</th>
                   <th>Acción</th>
                   <th>Marca</th>
                   <th>Modelo</th>
@@ -485,8 +521,25 @@ function NuevaPlanillaInner() {
               </thead>
               <tbody>
                 {filas.map((f, idx) => (
-                  <tr key={idx}>
-                    <td>
+                  <tr
+                    key={idx}
+                    onFocus={() => setFilaActivaIdx(idx)}
+                    onDragOver={(e) => e.preventDefault()}
+                    onDrop={() => soltarFilaEn(idx)}
+                    className={filaActivaIdx === idx ? "bg-amber-50" : undefined}
+                  >
+                    <td
+                      draggable
+                      onDragStart={() => setFilaArrastrada(idx)}
+                      onDragEnd={() => setFilaArrastrada(null)}
+                      className={`sticky left-0 z-10 w-8 cursor-grab text-center text-slate-400 ${
+                        filaActivaIdx === idx ? "bg-amber-50" : "bg-white"
+                      }`}
+                      title="Arrastrar para reordenar"
+                    >
+                      ⋮⋮
+                    </td>
+                    <td className={`sticky left-8 z-10 ${filaActivaIdx === idx ? "bg-amber-50" : "bg-white"}`}>
                       <input
                         className="border rounded px-1 w-14"
                         value={f.posicion}
@@ -584,8 +637,14 @@ function NuevaPlanillaInner() {
                     <td>
                       <div className="flex items-center gap-1">
                         <input
-                          className="border rounded px-1 w-20"
+                          className="border rounded px-1 w-20 disabled:bg-slate-100 disabled:text-slate-400"
                           value={f.estado}
+                          disabled={f.recapado || !!f.reparacion}
+                          title={
+                            f.recapado || f.reparacion
+                              ? "No se puede cambiar: este neumático ya tiene un recapado o reparación cargados"
+                              : ""
+                          }
                           onChange={(e) => actualizarFila(idx, "estado", e.target.value)}
                         />
                         {idx < filas.length - 1 && f.estado && (
@@ -612,6 +671,8 @@ function NuevaPlanillaInner() {
                       <input
                         type="checkbox"
                         checked={f.recapado}
+                        disabled={f.recapado}
+                        title={f.recapado ? "Un recapado ya hecho no se puede destildar" : ""}
                         onChange={(e) => actualizarFila(idx, "recapado", e.target.checked)}
                       />
                     </td>

@@ -1,11 +1,13 @@
 "use client";
 
 import { useState } from "react";
+import VolverAtras from "../../components/VolverAtras";
 import {
   buscarNeumaticosAvanzado,
   getHistorialNeumaticoExacto,
   getUbicacionVigente,
   getProveedorNeumatico,
+  getRegistroStock,
 } from "../../lib/traceability";
 
 export default function BuscarSerie() {
@@ -17,6 +19,7 @@ export default function BuscarSerie() {
   const [seleccionado, setSeleccionado] = useState(null);
   const [filas, setFilas] = useState([]);
   const [proveedor, setProveedor] = useState(null);
+  const [registroStock, setRegistroStock] = useState(null);
   const [cargando, setCargando] = useState(false);
   const [busco, setBusco] = useState(false);
 
@@ -46,7 +49,7 @@ export default function BuscarSerie() {
     setSeleccionado(item);
     setCargando(true);
     try {
-      const [data, prov] = await Promise.all([
+      const [data, prov, stock] = await Promise.all([
         getHistorialNeumaticoExacto({
           marca: item.marca,
           medida: item.medida,
@@ -59,9 +62,16 @@ export default function BuscarSerie() {
           numero_serie: item.numero_serie,
           dot: item.dot,
         }),
+        getRegistroStock({
+          marca: item.marca,
+          medida: item.medida,
+          numero_serie: item.numero_serie,
+          dot: item.dot,
+        }),
       ]);
       setFilas(data);
       setProveedor(prov);
+      setRegistroStock(stock);
     } finally {
       setCargando(false);
     }
@@ -72,6 +82,7 @@ export default function BuscarSerie() {
     setResultados([]);
     setBusco(false);
     setProveedor(null);
+    setRegistroStock(null);
     setMarca("");
     setMedida("");
     setNumeroSerie("");
@@ -82,6 +93,7 @@ export default function BuscarSerie() {
 
   return (
     <div className="space-y-6">
+      <VolverAtras />
       <h1 className="text-xl font-semibold">Búsqueda por neumático</h1>
       <p className="text-sm text-slate-500">
         Un neumático se identifica por la combinación de <strong>marca + medida + (número de
@@ -142,6 +154,11 @@ export default function BuscarSerie() {
               <span>
                 <span className="font-medium">{r.marca || "s/marca"}</span>{" "}
                 <span className="text-slate-500 text-sm">{r.modelo}</span>
+                {r.soloEnStock && (
+                  <span className="ml-2 text-xs bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded">
+                    en stock
+                  </span>
+                )}
               </span>
               <span className="text-sm text-slate-500">
                 {r.medida ? `${r.medida} · ` : ""}
@@ -180,6 +197,15 @@ export default function BuscarSerie() {
             </p>
           )}
 
+          {registroStock && (
+            <div className="border rounded p-3 text-sm bg-emerald-50 border-emerald-200">
+              <strong>En stock</strong> desde el {registroStock.fecha_compra}
+              {registroStock.proveedor ? ` — proveedor: ${registroStock.proveedor}` : ""}
+              {registroStock.estado ? ` — estado: ${registroStock.estado}` : ""}. Todavía no se
+              instaló en ningún equipo.
+            </div>
+          )}
+
           {vigente && (
             <div
               className={`border rounded p-3 text-sm ${
@@ -201,38 +227,40 @@ export default function BuscarSerie() {
             </div>
           )}
 
-          <table>
-            <thead>
-              <tr>
-                <th>Fecha</th>
-                <th>Matrícula</th>
-                <th>Posición</th>
-                <th>Acción</th>
-                <th>Procedencia</th>
-                <th>Destino</th>
-                <th>Recapado</th>
-                <th>Reparación</th>
-                <th>Estado</th>
-                <th>% Desgaste</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filas.map((f) => (
-                <tr key={f.id}>
-                  <td>{f.fecha}</td>
-                  <td>{f.matricula}</td>
-                  <td>{f.posicion || "-"}</td>
-                  <td>{f.accion}</td>
-                  <td>{f.procedencia || "-"}</td>
-                  <td>{f.destino || "-"}</td>
-                  <td>{f.recapado ? "Sí" : "No"}</td>
-                  <td>{f.reparacion || "-"}</td>
-                  <td>{f.estado || "-"}</td>
-                  <td>{f.porcentaje_desgaste != null ? `${f.porcentaje_desgaste}%` : "-"}</td>
+          {filas.length > 0 && (
+            <table>
+              <thead>
+                <tr>
+                  <th>Fecha</th>
+                  <th>Patente</th>
+                  <th>Posición</th>
+                  <th>Acción</th>
+                  <th>Procedencia</th>
+                  <th>Destino</th>
+                  <th>Recapado</th>
+                  <th>Reparación</th>
+                  <th>Estado</th>
+                  <th>% Desgaste</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {filas.map((f) => (
+                  <tr key={f.id}>
+                    <td>{f.fecha}</td>
+                    <td>{f.matricula}</td>
+                    <td>{f.posicion || "-"}</td>
+                    <td>{f.accion}</td>
+                    <td>{f.procedencia || "-"}</td>
+                    <td>{f.destino || "-"}</td>
+                    <td>{f.recapado ? "Sí" : "No"}</td>
+                    <td>{f.reparacion || "-"}</td>
+                    <td>{f.estado || "-"}</td>
+                    <td>{f.porcentaje_desgaste != null ? `${f.porcentaje_desgaste}%` : "-"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
         </div>
       )}
     </div>

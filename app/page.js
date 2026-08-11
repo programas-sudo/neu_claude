@@ -1,8 +1,8 @@
 export default function Home() {
   const opciones = [
     {
-      href: "/buscar-matricula",
-      titulo: "Buscar por matrícula",
+      href: "/buscar-patente",
+      titulo: "Buscar por patente",
       texto:
         "Ver el estado actual de los neumáticos de un vehículo y el historial completo de planillas cargadas.",
     },

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import VolverAtras from "../../components/VolverAtras";
 import {
   getResumenStock,
   getStockVigente,
@@ -124,6 +125,7 @@ export default function Stock() {
 
   return (
     <div className="space-y-6">
+      <VolverAtras />
       <div className="flex items-center justify-between flex-wrap gap-2">
         <h1 className="text-xl font-semibold">Stock de neumáticos en almacén</h1>
         <button
@@ -135,10 +137,7 @@ export default function Stock() {
       </div>
 
       <p className="text-sm text-slate-500">
-        Acá se registran los neumáticos comprados de acá en adelante, mientras están guardados
-        sin instalar en ningún equipo. Cuando cargués un movimiento donde uno "entra" y coincide
-        en marca + medida + N° de serie/DOT con algo del stock, se retira solo. Si no coincide
-        (por ejemplo, es un neumático sin identificación), lo retirás a mano desde acá.
+        Neumáticos comprados que todavía no están instalados en ningún equipo.
       </p>
 
       {mostrarFormulario && (
@@ -359,7 +358,7 @@ export default function Stock() {
                     <div className="flex items-center gap-1">
                       <input
                         className="border rounded px-1 w-32 text-xs"
-                        placeholder="ej: HKH677 pos.3"
+                        placeholder="Dónde se instaló"
                         value={retirando[item.id] || ""}
                         onChange={(e) =>
                           setRetirando((prev) => ({ ...prev, [item.id]: e.target.value }))
