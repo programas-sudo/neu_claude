@@ -140,7 +140,7 @@ export default function Ajustes() {
             <input type="checkbox" checked={esAdminNuevo} onChange={(e) => setEsAdminNuevo(e.target.checked)} />
             Administrador
           </label>
-          <button className="bg-emerald-600 text-white px-4 py-2 rounded text-sm" type="submit">
+          <button className="bg-orange-600 text-white px-4 py-2 rounded text-sm" type="submit">
             Agregar
           </button>
         </form>
