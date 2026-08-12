@@ -117,7 +117,7 @@ export default function AuthProvider({ children }) {
                 <button
                   type="submit"
                   disabled={verificando}
-                  className="flex-1 bg-slate-900 text-white rounded py-2 text-sm disabled:opacity-50"
+                  className="flex-1 bg-orange-600 text-white rounded py-2 text-sm disabled:opacity-50 hover:bg-orange-700"
                 >
                   {verificando ? "Verificando..." : "Entrar"}
                 </button>
@@ -131,9 +131,9 @@ export default function AuthProvider({ children }) {
 
   return (
     <SesionContext.Provider value={{ usuarioActual, cerrarSesion }}>
-      <header className="bg-slate-900 text-white px-6 py-4 flex items-center justify-between flex-wrap gap-2">
+      <header className="bg-slate-900 text-white px-6 py-3 flex items-center justify-between flex-wrap gap-2 border-b-4 border-orange-600">
         <a href="/" className="font-semibold text-lg">
-          🛞 Trazabilidad de Neumáticos
+          Trazabilidad de Neumáticos
         </a>
         <nav className="flex gap-4 text-sm items-center flex-wrap">
           <a href="/buscar-patente" className="hover:underline">
