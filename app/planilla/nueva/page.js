@@ -796,13 +796,13 @@ function NuevaPlanillaInner() {
           <button
             disabled={guardando}
             onClick={guardar}
-            className="bg-emerald-600 text-white px-5 py-2 rounded disabled:opacity-50"
+            className="bg-orange-600 text-white px-5 py-2 rounded disabled:opacity-50"
           >
             {guardando ? "Guardando..." : modoEdicion ? "Guardar cambios" : "Guardar planilla"}
           </button>
 
           {resultado && (
-            <div className="bg-emerald-50 border border-emerald-200 rounded p-4 space-y-2">
+            <div className="bg-orange-50 border border-orange-200 rounded p-4 space-y-2">
               <p className="font-medium">
                 {modoEdicion ? "Planilla actualizada correctamente ✅" : "Planilla guardada correctamente ✅"}
               </p>
