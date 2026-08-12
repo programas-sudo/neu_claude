@@ -155,7 +155,7 @@ export default function BuscarSerie() {
                 <span className="font-medium">{r.marca || "s/marca"}</span>{" "}
                 <span className="text-slate-500 text-sm">{r.modelo}</span>
                 {r.soloEnStock && (
-                  <span className="ml-2 text-xs bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded">
+                  <span className="ml-2 text-xs bg-orange-100 text-orange-700 px-2 py-0.5 rounded">
                     en stock
                   </span>
                 )}
@@ -198,7 +198,7 @@ export default function BuscarSerie() {
           )}
 
           {registroStock && (
-            <div className="border rounded p-3 text-sm bg-emerald-50 border-emerald-200">
+            <div className="border rounded p-3 text-sm bg-orange-50 border-orange-200">
               <strong>En stock</strong> desde el {registroStock.fecha_compra}
               {registroStock.proveedor ? ` — proveedor: ${registroStock.proveedor}` : ""}
               {registroStock.estado ? ` — estado: ${registroStock.estado}` : ""}. Todavía no se
@@ -209,7 +209,7 @@ export default function BuscarSerie() {
           {vigente && (
             <div
               className={`border rounded p-3 text-sm ${
-                vigente.instalado ? "bg-emerald-50 border-emerald-200" : "bg-red-50 border-red-200"
+                vigente.instalado ? "bg-orange-50 border-orange-200" : "bg-red-50 border-red-200"
               }`}
             >
               {vigente.instalado ? (
