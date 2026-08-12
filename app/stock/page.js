@@ -129,7 +129,7 @@ export default function Stock() {
       <div className="flex items-center justify-between flex-wrap gap-2">
         <h1 className="text-xl font-semibold">Stock de neumáticos en almacén</h1>
         <button
-          className="bg-emerald-600 text-white px-4 py-2 rounded text-sm"
+          className="bg-orange-600 text-white px-4 py-2 rounded text-sm"
           onClick={() => setMostrarFormulario((v) => !v)}
         >
           {mostrarFormulario ? "Cancelar" : "+ Agregar neumáticos comprados"}
@@ -278,7 +278,7 @@ export default function Stock() {
               + Agregar fila
             </button>
             <button
-              className="bg-emerald-600 text-white px-4 py-2 rounded text-sm disabled:opacity-50"
+              className="bg-orange-600 text-white px-4 py-2 rounded text-sm disabled:opacity-50"
               disabled={guardando}
               onClick={guardar}
             >
@@ -408,7 +408,7 @@ export default function Stock() {
                   <td>{item.destino_salida || "-"}</td>
                   <td>
                     {item.retirado_por_planilla_neumatico_id ? (
-                      <span className="text-xs bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded">
+                      <span className="text-xs bg-orange-100 text-orange-700 px-2 py-0.5 rounded">
                         automático
                       </span>
                     ) : (
