@@ -4,11 +4,15 @@ import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import VolverAtras from "../../../components/VolverAtras";
 import { useSesion } from "../../../components/AuthProvider";
+import CampoConSugerencias from "../../../components/CampoConSugerencias";
+import ConfirmarInstanciaModal from "../../../components/ConfirmarInstanciaModal";
 import {
   buscarVehiculoExacto,
   getVehiculoPorId,
   getEstadoActual,
   getPlanillaCompleta,
+  getValoresHistoricos,
+  getInstanciasExistentes,
   guardarPlanilla,
   actualizarPlanilla,
   subirAdjunto,
@@ -37,6 +41,8 @@ function filaVacia(posicion = "") {
     procedencia: "",
     destino: "",
     proveedor: "",
+    instancia: 1,
+    _identidadOriginal: null,
   };
 }
 
@@ -47,6 +53,17 @@ function NuevaPlanillaInner() {
   const modoEdicion = !!planillaIdEdicion;
 
   const [cargandoInicial, setCargandoInicial] = useState(modoEdicion);
+  const [marcasConocidas, setMarcasConocidas] = useState([]);
+  const [modelosConocidos, setModelosConocidos] = useState([]);
+  const [medidasConocidas, setMedidasConocidas] = useState([]);
+  const [modalInstancia, setModalInstancia] = useState(null);
+  const [mostrarAyudaMovimiento, setMostrarAyudaMovimiento] = useState(false);
+
+  useEffect(() => {
+    getValoresHistoricos("marca").then(setMarcasConocidas).catch(() => {});
+    getValoresHistoricos("modelo").then(setModelosConocidos).catch(() => {});
+    getValoresHistoricos("medida").then(setMedidasConocidas).catch(() => {});
+  }, []);
 
   const [matriculaInput, setMatriculaInput] = useState("");
   const [matriculaConfirmada, setMatriculaConfirmada] = useState(false);
@@ -101,6 +118,14 @@ function NuevaPlanillaInner() {
           reparacion: f.reparacion || "",
           procedencia: f.procedencia || "",
           destino: f.destino || "",
+          _identidadOriginal: {
+            marca: f.marca || "",
+            medida: f.medida || "",
+            numero_serie: f.numero_serie || "",
+            dot: f.dot || "",
+            instancia: f.instancia || 1,
+          },
+          instancia: f.instancia || 1,
         }))
       );
       setCargandoInicial(false);
@@ -160,6 +185,14 @@ function NuevaPlanillaInner() {
           reparacion: "",
           procedencia: "",
           destino: "",
+          _identidadOriginal: {
+            marca: actual.marca || "",
+            medida: actual.medida || "",
+            numero_serie: actual.numero_serie || "",
+            dot: actual.dot || "",
+            instancia: actual.instancia || 1,
+          },
+          instancia: actual.instancia || 1,
         });
       } else {
         nuevasFilas.push(filaVacia(String(i)));
@@ -203,10 +236,48 @@ function NuevaPlanillaInner() {
     setFilaArrastrada(null);
   }
 
+  const CAMPOS_IDENTIDAD = ["marca", "medida", "numero_serie", "dot"];
+  const CAMPOS_MAYUSCULA = ["marca", "modelo", "medida", "numero_serie", "dot", "proveedor"];
+
   function actualizarFila(idx, campo, valor) {
-    const nuevas = [...filas];
-    nuevas[idx] = { ...nuevas[idx], [campo]: valor };
-    setFilas(nuevas);
+    const valorFinal = CAMPOS_MAYUSCULA.includes(campo) ? valor.toUpperCase() : valor;
+    setFilas((prev) => {
+      const nuevas = [...prev];
+      const filaActual = nuevas[idx];
+      let filaNueva = { ...filaActual, [campo]: valorFinal };
+
+      // Si esta fila vino precargada desde el estado actual (un neumático
+      // ya existente) y ahora se está cambiando su marca/medida/serie/DOT,
+      // significa que se está reemplazando por un neumático DISTINTO: no
+      // tiene sentido seguir arrastrando el recapado/reparación/estado
+      // bloqueado del que estaba antes.
+      if (CAMPOS_IDENTIDAD.includes(campo) && filaActual._identidadOriginal) {
+        const orig = filaActual._identidadOriginal;
+        const coincidiaAntes =
+          (filaActual.marca || "") === orig.marca &&
+          (filaActual.medida || "") === orig.medida &&
+          (filaActual.numero_serie || "") === orig.numero_serie &&
+          (filaActual.dot || "") === orig.dot;
+        const coincideAhora =
+          (filaNueva.marca || "") === orig.marca &&
+          (filaNueva.medida || "") === orig.medida &&
+          (filaNueva.numero_serie || "") === orig.numero_serie &&
+          (filaNueva.dot || "") === orig.dot;
+
+        if (coincidiaAntes && !coincideAhora) {
+          filaNueva = {
+            ...filaNueva,
+            recapado: false,
+            reparacion: "",
+            estado: "",
+            _identidadOriginal: null,
+          };
+        }
+      }
+
+      nuevas[idx] = filaNueva;
+      return nuevas;
+    });
   }
 
   // Copia el valor de un campo (marca/modelo/medida/estado) de esta fila
@@ -258,6 +329,51 @@ function NuevaPlanillaInner() {
     setAdjuntosExistentes((prev) => prev.filter((a) => a.id !== adjunto.id));
   }
 
+  function preguntarInstancia(fila, candidatos) {
+    return new Promise((resolve) => {
+      setModalInstancia({ fila, candidatos, resolver: resolve });
+    });
+  }
+
+  // Antes de guardar, revisa fila por fila si el número de serie/DOT
+  // que se está cargando (recién tipeado, no heredado de una fila que
+  // ya sabíamos qué neumático era) coincide con algo que ya existe. Si
+  // coincide, pregunta si es el mismo neumático u otro distinto, y
+  // asigna la "instancia" que corresponda antes de continuar.
+  async function verificarInstancias(filasActuales) {
+    const resultado = [...filasActuales];
+    for (let i = 0; i < resultado.length; i++) {
+      const f = resultado[i];
+      if (!f.numero_serie && !f.dot) continue;
+
+      const orig = f._identidadOriginal;
+      const coincideConOriginal =
+        orig &&
+        (f.marca || "") === orig.marca &&
+        (f.medida || "") === orig.medida &&
+        (f.numero_serie || "") === orig.numero_serie &&
+        (f.dot || "") === orig.dot;
+      if (coincideConOriginal) continue; // ya sabíamos qué neumático es, no hace falta preguntar
+
+      const candidatos = await getInstanciasExistentes({
+        marca: f.marca,
+        medida: f.medida,
+        numero_serie: f.numero_serie,
+        dot: f.dot,
+      });
+
+      if (candidatos.length === 0) {
+        resultado[i] = { ...f, instancia: 1 };
+        continue;
+      }
+
+      const respuesta = await preguntarInstancia(f, candidatos);
+      setModalInstancia(null);
+      resultado[i] = { ...f, instancia: respuesta.instancia };
+    }
+    return resultado;
+  }
+
   async function guardar() {
     if (!matriculaConfirmada) {
       alert("Primero cargá / buscá la patente.");
@@ -270,7 +386,10 @@ function NuevaPlanillaInner() {
     setGuardando(true);
     setResultado(null);
     try {
-      const filasLimpias = filas.map((f) => ({
+      const filasVerificadas = await verificarInstancias(filas);
+      setFilas(filasVerificadas);
+
+      const filasLimpias = filasVerificadas.map((f) => ({
         ...f,
         porcentaje_desgaste: f.porcentaje_desgaste === "" ? null : Number(f.porcentaje_desgaste),
       }));
@@ -397,7 +516,19 @@ function NuevaPlanillaInner() {
         </div>
 
         <div>
-          <label className="block text-sm font-medium mb-1">Tipo de planilla *</label>
+          <label className="block text-sm font-medium mb-1 flex items-center gap-1">
+            Tipo de planilla *
+            {tipo === "movimiento" && (
+              <button
+                type="button"
+                className="text-xs bg-slate-200 rounded-full w-4 h-4 leading-4 text-center text-slate-600"
+                onClick={() => setMostrarAyudaMovimiento((v) => !v)}
+                title="Ayuda sobre movimientos entre vehículos"
+              >
+                ?
+              </button>
+            )}
+          </label>
           <select
             className="border rounded px-2 py-1 w-full"
             value={tipo}
@@ -410,6 +541,15 @@ function NuevaPlanillaInner() {
           {modoEdicion && (
             <p className="text-xs text-slate-400 mt-1">El tipo no se puede cambiar al editar.</p>
           )}
+          {tipo === "movimiento" && mostrarAyudaMovimiento && (
+            <div className="text-xs text-slate-600 bg-slate-50 border rounded p-2 mt-1">
+              Si el movimiento es entre dos vehículos, lo ideal es cargar primero la planilla del
+              vehículo del que <strong>salen</strong> los neumáticos. Si las dos planillas quedan
+              con la misma fecha (por ejemplo, un intercambio el mismo día), no hay problema en
+              qué orden las cargues: el sistema siempre prioriza la entrada por sobre la salida
+              para saber dónde quedó cada neumático.
+            </div>
+          )}
         </div>
 
         <div>
@@ -417,7 +557,7 @@ function NuevaPlanillaInner() {
           <input
             className="border rounded px-2 py-1 w-full"
             value={chofer}
-            onChange={(e) => setChofer(e.target.value)}
+            onChange={(e) => setChofer(e.target.value.toUpperCase())}
           />
         </div>
 
@@ -426,7 +566,7 @@ function NuevaPlanillaInner() {
           <input
             className="border rounded px-2 py-1 w-full"
             value={tipoVehiculo}
-            onChange={(e) => setTipoVehiculo(e.target.value)}
+            onChange={(e) => setTipoVehiculo(e.target.value.toUpperCase())}
           />
         </div>
 
@@ -565,10 +705,12 @@ function NuevaPlanillaInner() {
                     </td>
                     <td>
                       <div className="flex items-center gap-1">
-                        <input
+                        <CampoConSugerencias
                           className="border rounded px-1 w-20"
                           value={f.marca}
-                          onChange={(e) => actualizarFila(idx, "marca", e.target.value)}
+                          opciones={marcasConocidas}
+                          tipo="texto"
+                          onChange={(v) => actualizarFila(idx, "marca", v)}
                         />
                         {idx < filas.length - 1 && f.marca && (
                           <button
@@ -584,10 +726,12 @@ function NuevaPlanillaInner() {
                     </td>
                     <td>
                       <div className="flex items-center gap-1">
-                        <input
+                        <CampoConSugerencias
                           className="border rounded px-1 w-20"
                           value={f.modelo}
-                          onChange={(e) => actualizarFila(idx, "modelo", e.target.value)}
+                          opciones={modelosConocidos}
+                          tipo="texto"
+                          onChange={(v) => actualizarFila(idx, "modelo", v)}
                         />
                         {idx < filas.length - 1 && f.modelo && (
                           <button
@@ -603,10 +747,12 @@ function NuevaPlanillaInner() {
                     </td>
                     <td>
                       <div className="flex items-center gap-1">
-                        <input
+                        <CampoConSugerencias
                           className="border rounded px-1 w-20"
                           value={f.medida}
-                          onChange={(e) => actualizarFila(idx, "medida", e.target.value)}
+                          opciones={medidasConocidas}
+                          tipo="medida"
+                          onChange={(v) => actualizarFila(idx, "medida", v)}
                         />
                         {idx < filas.length - 1 && f.medida && (
                           <button
@@ -815,6 +961,14 @@ function NuevaPlanillaInner() {
             </div>
           )}
         </>
+      )}
+
+      {modalInstancia && (
+        <ConfirmarInstanciaModal
+          fila={modalInstancia.fila}
+          candidatos={modalInstancia.candidatos}
+          onResolver={(respuesta) => modalInstancia.resolver(respuesta)}
+        />
       )}
     </div>
   );

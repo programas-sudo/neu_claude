@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import VolverAtras from "../../components/VolverAtras";
+import CampoConSugerencias from "../../components/CampoConSugerencias";
 import {
   getResumenStock,
   getStockVigente,
@@ -10,6 +11,7 @@ import {
   retirarDeStock,
   reingresarAStock,
 } from "../../lib/stock";
+import { getValoresHistoricos } from "../../lib/traceability";
 
 function filaVacia() {
   return {
@@ -36,6 +38,9 @@ export default function Stock() {
   const [cargando, setCargando] = useState(true);
   const [guardando, setGuardando] = useState(false);
   const [retirando, setRetirando] = useState({}); // { [id]: texto del destino }
+  const [marcasConocidas, setMarcasConocidas] = useState([]);
+  const [modelosConocidos, setModelosConocidos] = useState([]);
+  const [medidasConocidas, setMedidasConocidas] = useState([]);
 
   async function cargarTodo() {
     setCargando(true);
@@ -51,11 +56,17 @@ export default function Stock() {
 
   useEffect(() => {
     cargarTodo();
+    getValoresHistoricos("marca").then(setMarcasConocidas).catch(() => {});
+    getValoresHistoricos("modelo").then(setModelosConocidos).catch(() => {});
+    getValoresHistoricos("medida").then(setMedidasConocidas).catch(() => {});
   }, []);
 
+  const CAMPOS_MAYUSCULA = ["marca", "modelo", "medida", "numero_serie", "dot", "proveedor"];
+
   function actualizarFila(idx, campo, valor) {
+    const valorFinal = CAMPOS_MAYUSCULA.includes(campo) ? valor.toUpperCase() : valor;
     const nuevas = [...filas];
-    nuevas[idx] = { ...nuevas[idx], [campo]: valor };
+    nuevas[idx] = { ...nuevas[idx], [campo]: valorFinal };
     setFilas(nuevas);
   }
 
@@ -88,10 +99,13 @@ export default function Stock() {
     }
     setGuardando(true);
     try {
-      await agregarStock(filasValidas.map((f) => ({ ...f, fecha_compra: fechaCompra })));
+      const { avisos } = await agregarStock(filasValidas.map((f) => ({ ...f, fecha_compra: fechaCompra })));
       setFilas([filaVacia()]);
       setMostrarFormulario(false);
       await cargarTodo();
+      if (avisos && avisos.length > 0) {
+        alert("Guardado. Nota:\n\n" + avisos.join("\n"));
+      }
     } catch (err) {
       alert("Error al guardar: " + err.message);
     } finally {
@@ -172,10 +186,12 @@ export default function Stock() {
                   <tr key={idx}>
                     <td>
                       <div className="flex items-center gap-1">
-                        <input
+                        <CampoConSugerencias
                           className="border rounded px-1 w-20"
                           value={f.marca}
-                          onChange={(e) => actualizarFila(idx, "marca", e.target.value)}
+                          opciones={marcasConocidas}
+                          tipo="texto"
+                          onChange={(v) => actualizarFila(idx, "marca", v)}
                         />
                         {idx < filas.length - 1 && f.marca && (
                           <button
@@ -190,18 +206,22 @@ export default function Stock() {
                       </div>
                     </td>
                     <td>
-                      <input
+                      <CampoConSugerencias
                         className="border rounded px-1 w-20"
                         value={f.modelo}
-                        onChange={(e) => actualizarFila(idx, "modelo", e.target.value)}
+                        opciones={modelosConocidos}
+                        tipo="texto"
+                        onChange={(v) => actualizarFila(idx, "modelo", v)}
                       />
                     </td>
                     <td>
                       <div className="flex items-center gap-1">
-                        <input
+                        <CampoConSugerencias
                           className="border rounded px-1 w-20"
                           value={f.medida}
-                          onChange={(e) => actualizarFila(idx, "medida", e.target.value)}
+                          opciones={medidasConocidas}
+                          tipo="medida"
+                          onChange={(v) => actualizarFila(idx, "medida", v)}
                         />
                         {idx < filas.length - 1 && f.medida && (
                           <button
@@ -344,13 +364,27 @@ export default function Stock() {
               </tr>
             </thead>
             <tbody>
-              {detalle.map((item) => (
+              {detalle.map((item) => {
+                const claveNominal = `${item.marca || ""}|${item.medida || ""}|${item.numero_serie || item.dot || ""}`;
+                const hayVarios =
+                  (item.numero_serie || item.dot) &&
+                  detalle.filter(
+                    (x) => `${x.marca || ""}|${x.medida || ""}|${x.numero_serie || x.dot || ""}` === claveNominal
+                  ).length > 1;
+                return (
                 <tr key={item.id}>
                   <td>{item.fecha_compra}</td>
                   <td>{item.marca || "-"}</td>
                   <td>{item.modelo || "-"}</td>
                   <td>{item.medida || "-"}</td>
-                  <td>{item.numero_serie || item.dot || "s/id"}</td>
+                  <td>
+                    {item.numero_serie || item.dot || "s/id"}
+                    {hayVarios && (
+                      <span className="ml-1 text-xs bg-slate-200 text-slate-700 px-1.5 py-0.5 rounded">
+                        unidad {item.instancia}
+                      </span>
+                    )}
+                  </td>
                   <td>{item.estado || "-"}</td>
                   <td>{item.proveedor || "-"}</td>
                   <td>{item.observaciones || "-"}</td>
@@ -373,7 +407,8 @@ export default function Stock() {
                     </div>
                   </td>
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
         )}

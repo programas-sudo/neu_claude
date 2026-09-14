@@ -11,6 +11,7 @@ import {
   getHistorialGlobal,
   getTodasLasPatentes,
   borrarPlanilla,
+  recalcularHistorialCompleto,
 } from "../../lib/traceability";
 import { exportarPlanillaPDF, exportarEstadoActualPDF } from "../../lib/pdf";
 import { exportarPlanillaExcel, exportarEstadoActualExcel } from "../../lib/excel";
@@ -21,6 +22,7 @@ import { useSesion } from "../../components/AuthProvider";
 export default function BuscarMatricula() {
   const { usuarioActual } = useSesion();
   const [planillaABorrar, setPlanillaABorrar] = useState(null);
+  const [recalculando, setRecalculando] = useState(false);
   const [texto, setTexto] = useState("");
   const [resultados, setResultados] = useState([]);
   const [vehiculo, setVehiculo] = useState(null);
@@ -92,6 +94,25 @@ export default function BuscarMatricula() {
     await borrarPlanilla(planillaABorrar.id, usuarioActual);
     setPlanillaABorrar(null);
     if (vehiculo) await seleccionarVehiculo(vehiculo);
+  }
+
+  async function recalcularTodo() {
+    if (
+      !window.confirm(
+        "Esto vuelve a procesar todas las planillas de este vehículo en orden cronológico real (puede tardar unos segundos si hay muchas). ¿Continuar?"
+      )
+    )
+      return;
+    setRecalculando(true);
+    try {
+      const cantidad = await recalcularHistorialCompleto(vehiculo.id);
+      await seleccionarVehiculo(vehiculo);
+      alert(`Listo, se recalcularon ${cantidad} planilla(s).`);
+    } catch (err) {
+      alert("Error al recalcular: " + err.message);
+    } finally {
+      setRecalculando(false);
+    }
   }
 
   async function verTrayecto(fila) {
@@ -240,22 +261,32 @@ export default function BuscarMatricula() {
 
       {vehiculo && (
         <div className="space-y-8">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between flex-wrap gap-2">
             <h2 className="text-lg font-semibold">
               {vehiculo.matricula}{" "}
               <span className="text-sm text-slate-500 font-normal">{vehiculo.tipo_vehiculo}</span>
             </h2>
-            <button
-              className="text-sm underline"
-              onClick={() => {
-                setVehiculo(null);
-                setResultados([]);
-                setTexto("");
-                setBusquedaRealizada(false);
-              }}
-            >
-              ← nueva búsqueda
-            </button>
+            <div className="flex items-center gap-3">
+              <button
+                className="text-xs bg-white border px-3 py-1.5 rounded disabled:opacity-50"
+                disabled={recalculando}
+                onClick={recalcularTodo}
+                title="Vuelve a procesar todas las planillas de este vehículo en orden cronológico real, útil si se cargaron planillas viejas después de otras más nuevas"
+              >
+                {recalculando ? "Recalculando..." : "Recalcular todo el historial"}
+              </button>
+              <button
+                className="text-sm underline"
+                onClick={() => {
+                  setVehiculo(null);
+                  setResultados([]);
+                  setTexto("");
+                  setBusquedaRealizada(false);
+                }}
+              >
+                ← nueva búsqueda
+              </button>
+            </div>
           </div>
 
           {/* ESTADO ACTUAL */}

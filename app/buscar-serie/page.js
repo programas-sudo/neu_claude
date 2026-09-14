@@ -55,18 +55,21 @@ export default function BuscarSerie() {
           medida: item.medida,
           numero_serie: item.numero_serie,
           dot: item.dot,
+          instancia: item.instancia,
         }),
         getProveedorNeumatico({
           marca: item.marca,
           medida: item.medida,
           numero_serie: item.numero_serie,
           dot: item.dot,
+          instancia: item.instancia,
         }),
         getRegistroStock({
           marca: item.marca,
           medida: item.medida,
           numero_serie: item.numero_serie,
           dot: item.dot,
+          instancia: item.instancia,
         }),
       ]);
       setFilas(data);
@@ -145,27 +148,39 @@ export default function BuscarSerie() {
 
       {!seleccionado && busco && (
         <div className="bg-white rounded border divide-y">
-          {resultados.map((r) => (
-            <button
-              key={r.identificador}
-              onClick={() => seleccionar(r)}
-              className="w-full text-left px-4 py-2 hover:bg-slate-50 flex justify-between"
-            >
-              <span>
-                <span className="font-medium">{r.marca || "s/marca"}</span>{" "}
-                <span className="text-slate-500 text-sm">{r.modelo}</span>
-                {r.soloEnStock && (
-                  <span className="ml-2 text-xs bg-orange-100 text-orange-700 px-2 py-0.5 rounded">
-                    en stock
-                  </span>
-                )}
-              </span>
-              <span className="text-sm text-slate-500">
-                {r.medida ? `${r.medida} · ` : ""}
-                {r.numero_serie ? `Serie ${r.numero_serie}` : r.dot ? `DOT ${r.dot}` : "s/identificación"}
-              </span>
-            </button>
-          ))}
+          {resultados.map((r) => {
+            const claveNominal = `${r.marca || ""}|${r.medida || ""}|${r.numero_serie || r.dot || ""}`;
+            const hayVarios =
+              resultados.filter(
+                (x) => `${x.marca || ""}|${x.medida || ""}|${x.numero_serie || x.dot || ""}` === claveNominal
+              ).length > 1;
+            return (
+              <button
+                key={r.identificador}
+                onClick={() => seleccionar(r)}
+                className="w-full text-left px-4 py-2 hover:bg-slate-50 flex justify-between"
+              >
+                <span>
+                  <span className="font-medium">{r.marca || "s/marca"}</span>{" "}
+                  <span className="text-slate-500 text-sm">{r.modelo}</span>
+                  {hayVarios && (
+                    <span className="ml-2 text-xs bg-slate-200 text-slate-700 px-2 py-0.5 rounded">
+                      unidad {r.instancia}
+                    </span>
+                  )}
+                  {r.soloEnStock && (
+                    <span className="ml-2 text-xs bg-orange-100 text-orange-700 px-2 py-0.5 rounded">
+                      en stock
+                    </span>
+                  )}
+                </span>
+                <span className="text-sm text-slate-500">
+                  {r.medida ? `${r.medida} · ` : ""}
+                  {r.numero_serie ? `Serie ${r.numero_serie}` : r.dot ? `DOT ${r.dot}` : "s/identificación"}
+                </span>
+              </button>
+            );
+          })}
           {resultados.length === 0 && (
             <p className="text-sm text-slate-400 px-4 py-2">
               No se encontró ningún neumático con esos datos.
