@@ -6,6 +6,7 @@ import {
   getEstadoActual,
   getHistorialPlanillas,
   getHistorialNeumaticoExacto,
+  ordenarTrayectoParaMostrar,
   getUbicacionVigente,
   getProveedorNeumatico,
   getHistorialGlobal,
@@ -137,7 +138,7 @@ export default function BuscarMatricula() {
       const identificador = [fila.marca, fila.medida, fila.numero_serie || fila.dot]
         .filter(Boolean)
         .join(" / ");
-      setTrayecto({ identificador, filas, proveedor });
+      setTrayecto({ identificador, filas: ordenarTrayectoParaMostrar(filas), proveedor });
     } finally {
       setCargando(false);
     }
