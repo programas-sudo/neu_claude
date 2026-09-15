@@ -5,6 +5,7 @@ import VolverAtras from "../../components/VolverAtras";
 import {
   buscarNeumaticosAvanzado,
   getHistorialNeumaticoExacto,
+  ordenarTrayectoParaMostrar,
   getUbicacionVigente,
   getProveedorNeumatico,
   getRegistroStock,
@@ -72,7 +73,7 @@ export default function BuscarSerie() {
           instancia: item.instancia,
         }),
       ]);
-      setFilas(data);
+      setFilas(ordenarTrayectoParaMostrar(data));
       setProveedor(prov);
       setRegistroStock(stock);
     } finally {
